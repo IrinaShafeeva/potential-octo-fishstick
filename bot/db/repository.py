@@ -4,7 +4,10 @@ from typing import Optional
 from sqlalchemy import select, update, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import User, Chapter, Memory, Question, QuestionLog, TopicCoverage
+from bot.db.models import (
+    User, Chapter, Memory, Question, QuestionLog, TopicCoverage,
+    PromoCode, PromoRedemption, PaymentLog,
+)
 
 
 class Repository:
@@ -348,3 +351,81 @@ class Repository:
             "chapters_filled": filled_chapters,
             "estimated_pages": estimated_pages,
         }
+
+    # ── Promo Codes ──
+
+    async def create_promo_code(
+        self, code: str, premium_days: int = 90, max_uses: int = 1
+    ) -> PromoCode:
+        promo = PromoCode(code=code.upper(), premium_days=premium_days, max_uses=max_uses)
+        self.session.add(promo)
+        await self.session.commit()
+        await self.session.refresh(promo)
+        return promo
+
+    async def get_promo_code(self, code: str) -> Optional[PromoCode]:
+        result = await self.session.execute(
+            select(PromoCode).where(PromoCode.code == code.upper())
+        )
+        return result.scalar_one_or_none()
+
+    async def redeem_promo_code(self, user_id: int, code: str) -> dict:
+        """Try to redeem a promo code. Returns {"ok": bool, "msg": str, "days": int}."""
+        promo = await self.get_promo_code(code)
+        if not promo:
+            return {"ok": False, "msg": "Промокод не найден", "days": 0}
+        if not promo.is_active:
+            return {"ok": False, "msg": "Промокод больше не активен", "days": 0}
+        if promo.used_count >= promo.max_uses:
+            return {"ok": False, "msg": "Промокод уже использован максимальное число раз", "days": 0}
+
+        already = await self.session.execute(
+            select(PromoRedemption).where(
+                PromoRedemption.promo_code_id == promo.id,
+                PromoRedemption.user_id == user_id,
+            )
+        )
+        if already.scalar_one_or_none():
+            return {"ok": False, "msg": "Вы уже использовали этот промокод", "days": 0}
+
+        promo.used_count += 1
+        self.session.add(PromoRedemption(promo_code_id=promo.id, user_id=user_id))
+
+        user = await self.session.execute(select(User).where(User.id == user_id))
+        user_obj = user.scalar_one()
+        now = datetime.utcnow()
+        base = user_obj.premium_until if (user_obj.premium_until and user_obj.premium_until > now) else now
+        from datetime import timedelta
+        new_until = base + timedelta(days=promo.premium_days)
+        user_obj.is_premium = True
+        user_obj.premium_until = new_until
+
+        await self.session.commit()
+        return {"ok": True, "msg": f"Подписка активирована до {new_until.strftime('%d.%m.%Y')}", "days": promo.premium_days}
+
+    # ── Payment Logs ──
+
+    async def log_payment(
+        self, telegram_id: int, provider: str = "tribute", **kwargs
+    ) -> PaymentLog:
+        log = PaymentLog(telegram_id=telegram_id, provider=provider, **kwargs)
+        self.session.add(log)
+        await self.session.commit()
+        return log
+
+    async def activate_premium_by_telegram_id(self, telegram_id: int, days: int = 90) -> bool:
+        """Activate premium for user by telegram_id. Returns True if user found."""
+        result = await self.session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            return False
+
+        now = datetime.utcnow()
+        base = user.premium_until if (user.premium_until and user.premium_until > now) else now
+        from datetime import timedelta
+        user.is_premium = True
+        user.premium_until = base + timedelta(days=days)
+        await self.session.commit()
+        return True

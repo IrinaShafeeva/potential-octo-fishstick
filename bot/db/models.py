@@ -116,3 +116,37 @@ class TopicCoverage(Base):
     last_used_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="topic_coverages")
+
+
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(50), unique=True, nullable=False, index=True)
+    premium_days = Column(Integer, default=90)
+    max_uses = Column(Integer, default=1)
+    used_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+
+class PromoRedemption(Base):
+    __tablename__ = "promo_redemptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    promo_code_id = Column(Integer, ForeignKey("promo_codes.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    redeemed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PaymentLog(Base):
+    __tablename__ = "payment_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(Integer, nullable=False)
+    provider = Column(String(50), default="tribute")
+    product = Column(String(100), nullable=True)
+    amount = Column(Float, nullable=True)
+    currency = Column(String(10), nullable=True)
+    raw_payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
