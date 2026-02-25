@@ -43,7 +43,28 @@ async def _process_and_preview(
 ) -> None:
     """Shared pipeline: clean → classify → edit (with thread_summary) → preview."""
     processing_msg = await message.answer("⏳ Обрабатываю текст…")
+    try:
+        await _pipeline(
+            message, processing_msg, raw_transcript,
+            audio_file_id, source_question_id, state,
+        )
+    except Exception as e:
+        logger.error("Processing pipeline error: %s", e, exc_info=True)
+        await processing_msg.edit_text(
+            "Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏"
+        )
+        if state:
+            await state.clear()
 
+
+async def _pipeline(
+    message: Message,
+    processing_msg,
+    raw_transcript: str,
+    audio_file_id: str | None,
+    source_question_id: str | None,
+    state: FSMContext | None,
+) -> None:
     cleaned = await clean_transcript(raw_transcript)
     await processing_msg.edit_text("⏳ Редактирую для книги…")
 

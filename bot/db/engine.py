@@ -8,23 +8,21 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 
 
 async def init_db() -> None:
+    # Create all tables (idempotent — skips existing ones)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Safe migration: add style_notes column if it doesn't exist yet
+
+    # Each migration in its own transaction so a failure in one
+    # doesn't abort or roll back the others
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE users ADD COLUMN style_notes TEXT",
+        "ALTER TABLE chapters ADD COLUMN thread_summary TEXT",
+    ]
+    for stmt in migrations:
         try:
-            await conn.execute(
-                __import__("sqlalchemy").text(
-                    "ALTER TABLE users ADD COLUMN style_notes TEXT"
-                )
-            )
-        except Exception:
-            pass  # Column already exists — ignore
-        try:
-            await conn.execute(
-                __import__("sqlalchemy").text(
-                    "ALTER TABLE chapters ADD COLUMN thread_summary TEXT"
-                )
-            )
+            async with engine.begin() as conn:
+                await conn.execute(text(stmt))
         except Exception:
             pass  # Column already exists — ignore
 
