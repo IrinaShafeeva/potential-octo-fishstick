@@ -2,8 +2,8 @@ aiogram==3.13.1
 openai==1.58.1
 asyncpg==0.30.0
 sqlalchemy[asyncio]==2.0.36
-pydantic==2.10.3
-pydantic-settings==2.7.0
+pydantic>=2.7.0,<2.10
+pydantic-settings>=2.7.0,<3.0
 fpdf2==2.8.2
 aiohttp>=3.9.0,<3.11
 python-dotenv==1.0.1
