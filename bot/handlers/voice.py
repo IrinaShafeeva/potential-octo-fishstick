@@ -12,7 +12,7 @@ from bot.keyboards.inline_memory import memory_preview_kb, chapter_select_kb
 from bot.keyboards.main_menu import main_menu_kb
 from bot.loader import bot
 from bot.services.stt import transcribe_voice
-from bot.services.ai_editor import clean_transcript, edit_memoir
+from bot.services.ai_editor import clean_transcript, edit_memoir, merge_clarification
 from bot.services.timeline import extract_timeline
 from bot.services.classifier import classify_chapter
 
@@ -382,17 +382,22 @@ async def handle_clarification(message: Message, state: FSMContext) -> None:
         )
         return
 
+    merging_msg = await message.answer("⏳ Встраиваю уточнение в текст…")
+
     async with async_session() as session:
         repo = Repository(session)
         memory = await repo.get_memory(memory_id)
         if not memory:
-            await message.answer("Воспоминание не найдено.")
+            await merging_msg.edit_text("Воспоминание не найдено.")
             return
-        new_text = (memory.edited_memoir_text or "") + "\n\n" + addition
-        await repo.update_memory_text(memory_id, new_text)
+        merged = await merge_clarification(
+            memory.edited_memoir_text or "", addition
+        )
+        await repo.update_memory_text(memory_id, merged)
 
-    await message.answer(
-        "✅ Дополнение добавлено. Теперь вы можете сохранить воспоминание:",
+    preview = merged[:1500] + ("…" if len(merged) > 1500 else "")
+    await merging_msg.edit_text(
+        f"✅ Готово! Вот обновлённый текст:\n\n{preview}\n\nСохранить?",
         reply_markup=memory_preview_kb(memory_id),
     )
 

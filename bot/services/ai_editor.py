@@ -84,3 +84,30 @@ async def edit_memoir(
             "needs_clarification": False,
             "clarification_question": "",
         }
+
+
+async def merge_clarification(memoir_text: str, clarification_answer: str) -> str:
+    """Weave a clarification answer into an existing memoir text.
+
+    Returns the merged literary text, or original + answer as fallback.
+    """
+    prompt = (
+        "Ты — литературный редактор мемуаров.\n"
+        "Тебе дан готовый текст воспоминания и уточняющий ответ автора.\n"
+        "Встрой ответ органично в основной текст — так, чтобы получился единый связный рассказ "
+        "от первого лица. Сохрани стиль и голос автора. "
+        "Верни ТОЛЬКО итоговый текст, без пояснений.\n\n"
+        f"ТЕКСТ ВОСПОМИНАНИЯ:\n{memoir_text}\n\n"
+        f"УТОЧНЕНИЕ АВТОРА:\n{clarification_answer}"
+    )
+    try:
+        response = await client.chat.completions.create(
+            model=settings.fast_model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=4000,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error("Merge clarification error: %s", e)
+        return memoir_text + "\n\n" + clarification_answer
