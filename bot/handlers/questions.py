@@ -21,8 +21,13 @@ async def _send_question(
     telegram_id: int,
     state: FSMContext,
     selected_pack: str | None = None,
+    should_edit: bool = False,
 ) -> None:
-    """Pick a question and send it to the user."""
+    """Pick a question and send it to the user.
+
+    If should_edit=True and called from a CallbackQuery, edits the existing
+    message in-place instead of sending a new one.
+    """
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_user(telegram_id)
@@ -80,6 +85,15 @@ async def _send_question(
 
     text = f"💭 <b>{question.text}</b>"
 
+    if isinstance(message_or_callback, CallbackQuery) and should_edit:
+        try:
+            await message_or_callback.message.edit_text(
+                text, reply_markup=question_actions_kb(log.id)
+            )
+            return
+        except Exception:
+            pass  # fall through to answer() if edit fails (e.g. message too old)
+
     if isinstance(message_or_callback, CallbackQuery):
         await message_or_callback.message.answer(
             text, reply_markup=question_actions_kb(log.id)
@@ -105,7 +119,7 @@ async def cb_select_pack(callback: CallbackQuery, state: FSMContext) -> None:
     pack = callback.data.split(":")[1]
     await state.update_data(current_pack=pack)
     await callback.answer()
-    await _send_question(callback, callback.from_user.id, state, selected_pack=pack)
+    await _send_question(callback, callback.from_user.id, state, selected_pack=pack, should_edit=True)
 
 
 @router.callback_query(F.data.startswith("q_next:"))
@@ -120,7 +134,7 @@ async def cb_next_question(callback: CallbackQuery, state: FSMContext) -> None:
     current_pack = data.get("current_pack")
 
     await callback.answer()
-    await _send_question(callback, callback.from_user.id, state, selected_pack=current_pack)
+    await _send_question(callback, callback.from_user.id, state, selected_pack=current_pack, should_edit=True)
 
 
 @router.callback_query(F.data.startswith("q_pause:"))

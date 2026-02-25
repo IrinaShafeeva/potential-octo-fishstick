@@ -1,5 +1,4 @@
 import logging
-from io import BytesIO
 from pathlib import Path
 
 from fpdf import FPDF
@@ -98,10 +97,9 @@ async def export_book_pdf(
                 pdf.separator()
 
     try:
-        buf = BytesIO()
-        pdf.output(buf)
-        logger.info("PDF generated in memory for user_id=%d (%d bytes)", user_id, buf.tell())
-        return buf.getvalue()
+        pdf_bytes = pdf.output()
+        logger.info("PDF generated in memory for user_id=%d (%d bytes)", user_id, len(pdf_bytes))
+        return pdf_bytes
     except Exception as e:
         logger.error("PDF export error: %s", e)
         return None
