@@ -26,6 +26,7 @@ STT_CONFIDENCE_THRESHOLD = 0.3
 class MemoryStates(StatesGroup):
     waiting_edit_text = State()
     waiting_text_memory = State()
+    waiting_clarification = State()
 
 
 async def _process_and_preview(
@@ -96,22 +97,32 @@ async def _process_and_preview(
     if chapter_suggestion:
         chapter_line = f"\n📁 Предлагаю главу: <b>{chapter_suggestion}</b>"
 
-    clarification = ""
-    if edited.get("needs_clarification") and edited.get("clarification_question"):
-        clarification = f"\n\n💬 {edited['clarification_question']}"
+    has_clarification = edited.get("needs_clarification") and edited.get("clarification_question")
 
-    await processing_msg.edit_text(
-        f"<b>{title}</b>{chapter_line}\n\n{preview}{clarification}",
-        reply_markup=memory_preview_kb(memory.id),
-    )
-
-    if state:
-        data = await state.get_data()
-        question_log_id = data.get("answering_question_log_id")
-        if question_log_id:
-            async with async_session() as session:
-                repo = Repository(session)
-                await repo.mark_question_answered(question_log_id, memory.id)
+    if has_clarification:
+        # Show preview without save buttons, then ask the clarification question
+        await processing_msg.edit_text(
+            f"<b>{title}</b>{chapter_line}\n\n{preview}"
+        )
+        await message.answer(
+            f"💬 {edited['clarification_question']}\n\n"
+            "Ответьте — я дополню воспоминание и предложу сохранить."
+        )
+        if state:
+            await state.set_state(MemoryStates.waiting_clarification)
+            await state.update_data(clarification_memory_id=memory.id)
+    else:
+        await processing_msg.edit_text(
+            f"<b>{title}</b>{chapter_line}\n\n{preview}",
+            reply_markup=memory_preview_kb(memory.id),
+        )
+        if state:
+            data = await state.get_data()
+            question_log_id = data.get("answering_question_log_id")
+            if question_log_id:
+                async with async_session() as session:
+                    repo = Repository(session)
+                    await repo.mark_question_answered(question_log_id, memory.id)
             await state.clear()
 
 
@@ -348,3 +359,77 @@ async def cb_move_memory(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("mem_split:"))
 async def cb_split_memory(callback: CallbackQuery) -> None:
     await callback.answer("Разбиение на истории — скоро будет доступно!", show_alert=True)
+
+
+# ── Clarification answer ──
+
+@router.message(F.text, MemoryStates.waiting_clarification)
+async def handle_clarification(message: Message, state: FSMContext) -> None:
+    """User answered the clarification question — append to memory and show save buttons."""
+    data = await state.get_data()
+    memory_id = data.get("clarification_memory_id")
+    await state.clear()
+
+    if not memory_id:
+        await message.answer("Не удалось найти воспоминание. Попробуйте записать заново.")
+        return
+
+    addition = message.text.strip()
+    if len(addition) < 5:
+        await message.answer(
+            "Слишком коротко. Расскажите чуть подробнее.",
+            reply_markup=memory_preview_kb(memory_id),
+        )
+        return
+
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+        if not memory:
+            await message.answer("Воспоминание не найдено.")
+            return
+        new_text = (memory.edited_memoir_text or "") + "\n\n" + addition
+        await repo.update_memory_text(memory_id, new_text)
+
+    await message.answer(
+        "✅ Дополнение добавлено. Теперь вы можете сохранить воспоминание:",
+        reply_markup=memory_preview_kb(memory_id),
+    )
+
+
+# ── Catch-all: plain text treated as a memory (lowest priority) ──
+
+@router.message(F.text)
+async def catch_all_text(message: Message, state: FSMContext) -> None:
+    """Any unrecognized text ≥20 chars is processed as a memory entry."""
+    text = message.text.strip()
+    if len(text) < 20:
+        await message.answer(
+            "Расскажите чуть подробнее — хотя бы пару предложений. "
+            "Или нажмите «🎙 Записать воспоминание» в меню."
+        )
+        return
+
+    async with async_session() as session:
+        repo = Repository(session)
+        user = await repo.get_or_create_user(
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+        if not user.is_premium and user.memories_count >= settings.free_memories_limit:
+            await message.answer(
+                f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
+                "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
+                reply_markup=main_menu_kb(),
+            )
+            return
+
+    data = await state.get_data()
+    source_question_id = data.get("answering_question_id")
+
+    await _process_and_preview(
+        message, text,
+        source_question_id=source_question_id,
+        state=state,
+    )

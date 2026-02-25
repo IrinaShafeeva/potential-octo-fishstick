@@ -12,6 +12,6 @@ def register_all_handlers(dp: Dispatcher) -> None:
     dp.include_router(start_router)
     dp.include_router(questions_router)
     dp.include_router(structure_router)
-    dp.include_router(voice_router)
     dp.include_router(book_router)
     dp.include_router(subscription_router)
+    dp.include_router(voice_router)  # last: contains catch-all text handler
