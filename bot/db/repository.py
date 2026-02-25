@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import (
     User, Chapter, Memory, Question, QuestionLog, TopicCoverage,
-    PromoCode, PromoRedemption, PaymentLog,
+    PromoCode, PromoRedemption, PaymentLog, Character,
 )
 
 
@@ -473,3 +473,67 @@ class Repository:
         user.premium_until = base + timedelta(days=days)
         await self.session.commit()
         return True
+
+    # ── Characters ──
+
+    async def get_characters(self, user_id: int) -> list[Character]:
+        result = await self.session.execute(
+            select(Character)
+            .where(Character.user_id == user_id)
+            .order_by(Character.mention_count.desc())
+        )
+        return list(result.scalars().all())
+
+    async def upsert_character(
+        self,
+        user_id: int,
+        name: str,
+        relationship: str | None = None,
+        description: str | None = None,
+        aliases: list[str] | None = None,
+    ) -> Character:
+        """Create or update a character by name (case-insensitive) or alias match."""
+        # Try exact name match first (case-insensitive)
+        result = await self.session.execute(
+            select(Character).where(
+                Character.user_id == user_id,
+                func.lower(Character.name) == name.lower(),
+            )
+        )
+        char = result.scalar_one_or_none()
+
+        # Try alias match if not found by name
+        if char is None:
+            all_chars = await self.get_characters(user_id)
+            for c in all_chars:
+                if c.aliases and any(
+                    a.lower() == name.lower() for a in c.aliases
+                ):
+                    char = c
+                    break
+
+        if char:
+            char.mention_count += 1
+            char.last_seen_at = datetime.utcnow()
+            if relationship and not char.relationship:
+                char.relationship = relationship
+            if description and not char.description:
+                char.description = description
+            if aliases:
+                existing = set(char.aliases or [])
+                existing.update(aliases)
+                char.aliases = list(existing)
+        else:
+            char = Character(
+                user_id=user_id,
+                name=name,
+                relationship=relationship,
+                description=description,
+                aliases=aliases or [],
+                mention_count=1,
+            )
+            self.session.add(char)
+
+        await self.session.commit()
+        await self.session.refresh(char)
+        return char

@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 from bot.config import settings
 from bot.prompts.cleaner import CLEANER_SYSTEM, CLEANER_USER
 from bot.prompts.editor import EDITOR_SYSTEM, EDITOR_USER
+from bot.services.character_extractor import format_characters_for_editor
 
 logger = logging.getLogger(__name__)
 client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -43,7 +44,7 @@ def _format_context_list(items: list) -> str:
 
 async def edit_memoir(
     cleaned_transcript: str,
-    known_people: list | None = None,
+    known_characters: list | None = None,
     known_places: list | None = None,
     style_notes: str | None = None,
 ) -> dict:
@@ -51,9 +52,10 @@ async def edit_memoir(
 
     Returns dict with keys: edited_memoir_text, title, tags, people, places,
     needs_clarification, clarification_question.
-    Accepts known_people/known_places as list[str] or list[tuple[str, int]].
+    known_characters: list of Character ORM objects or dicts with name/relationship/description.
+    known_places: list[str] or list[tuple[str, int]].
     """
-    people_str = _format_context_list(known_people) if known_people else "нет данных"
+    characters_str = format_characters_for_editor(known_characters) if known_characters else "нет данных"
     places_str = _format_context_list(known_places) if known_places else "нет данных"
     style_str = style_notes.strip() if style_notes else "профиль ещё формируется"
 
@@ -66,7 +68,7 @@ async def edit_memoir(
                     "role": "user",
                     "content": EDITOR_USER.format(
                         cleaned_transcript=cleaned_transcript,
-                        known_people=people_str,
+                        known_characters=characters_str,
                         known_places=places_str,
                         style_notes=style_str,
                     ),

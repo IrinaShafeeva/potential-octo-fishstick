@@ -36,6 +36,7 @@ class User(Base):
     memories = relationship("Memory", back_populates="user", cascade="all, delete-orphan")
     question_logs = relationship("QuestionLog", back_populates="user", cascade="all, delete-orphan")
     topic_coverages = relationship("TopicCoverage", back_populates="user", cascade="all, delete-orphan")
+    characters = relationship("Character", back_populates="user", cascade="all, delete-orphan")
 
 
 class Chapter(Base):
@@ -79,6 +80,22 @@ class Memory(Base):
 
     user = relationship("User", back_populates="memories")
     chapter = relationship("Chapter", back_populates="memories")
+
+
+class Character(Base):
+    __tablename__ = "characters"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)       # canonical name, e.g. "Мария"
+    aliases = Column(JSON, default=list)             # ["Маша", "жена", "мама Маша"]
+    relationship = Column(String(255), nullable=True)  # "жена", "дядя", "сосед"
+    description = Column(Text, nullable=True)        # brief context snippet
+    mention_count = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="characters")
 
 
 class Question(Base):

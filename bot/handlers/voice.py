@@ -17,6 +17,7 @@ from bot.services.ai_editor import clean_transcript, edit_memoir, merge_clarific
 from bot.services.timeline import extract_timeline
 from bot.services.classifier import classify_chapter
 from bot.services.style_profiler import update_style_profile
+from bot.services.character_extractor import extract_characters
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -51,11 +52,11 @@ async def _process_and_preview(
             username=message.from_user.username,
             first_name=message.from_user.first_name,
         )
-        known_people = await repo.get_people_with_counts(user.id)
+        known_characters = await repo.get_characters(user.id)
         known_places = await repo.get_places_with_counts(user.id)
         style_notes = await repo.get_style_notes(user.id)
 
-    edited = await edit_memoir(cleaned, known_people, known_places, style_notes)
+    edited = await edit_memoir(cleaned, known_characters, known_places, style_notes)
     time_hint = await extract_timeline(edited.get("edited_memoir_text", cleaned))
 
     async with async_session() as session:
@@ -281,6 +282,35 @@ async def _refresh_style_profile(user_id: int, memory_text: str) -> None:
         logger.error("Style profile update error: %s", e)
 
 
+async def _refresh_characters(user_id: int, memory_text: str) -> None:
+    """Extract characters from a new approved memory and upsert into character library."""
+    try:
+        async with async_session() as session:
+            repo = Repository(session)
+            existing = await repo.get_characters(user_id)
+            existing_dicts = [
+                {
+                    "name": c.name,
+                    "relationship": c.relationship,
+                    "description": c.description,
+                }
+                for c in existing
+            ]
+            extracted = await extract_characters(memory_text, existing_dicts)
+            for char in extracted:
+                name = char.get("name", "").strip()
+                if name:
+                    await repo.upsert_character(
+                        user_id=user_id,
+                        name=name,
+                        relationship=char.get("relationship"),
+                        description=char.get("description"),
+                        aliases=char.get("aliases", []),
+                    )
+    except Exception as e:
+        logger.error("Character extraction error: %s", e)
+
+
 # ── Inline callbacks for memory actions ──
 
 @router.callback_query(F.data.startswith("mem_save:"))
@@ -310,9 +340,9 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
                 f"✅ Сохранено в главу «{chapters[0].title}»\n"
                 f"📊 Всего воспоминаний: {new_count}",
             )
-            asyncio.create_task(
-                _refresh_style_profile(user.id, memory.edited_memoir_text or "")
-            )
+            text = memory.edited_memoir_text or ""
+            asyncio.create_task(_refresh_style_profile(user.id, text))
+            asyncio.create_task(_refresh_characters(user.id, text))
         else:
             chapters_dicts = [{"id": ch.id, "title": ch.title} for ch in chapters]
             await callback.message.edit_reply_markup(
@@ -337,9 +367,9 @@ async def cb_move_to_chapter(callback: CallbackQuery) -> None:
         chapter = await repo.get_chapter(chapter_id)
         await repo.update_topic_coverage(user.id, memory.tags or [])
 
-    asyncio.create_task(
-        _refresh_style_profile(user.id, memory.edited_memoir_text or "")
-    )
+    text = memory.edited_memoir_text or ""
+    asyncio.create_task(_refresh_style_profile(user.id, text))
+    asyncio.create_task(_refresh_characters(user.id, text))
 
     await callback.message.edit_text(
         f"{callback.message.text}\n\n"
