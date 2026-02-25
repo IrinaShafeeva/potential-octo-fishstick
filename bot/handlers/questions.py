@@ -103,6 +103,7 @@ async def questions_start(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("pack:"))
 async def cb_select_pack(callback: CallbackQuery, state: FSMContext) -> None:
     pack = callback.data.split(":")[1]
+    await state.update_data(current_pack=pack)
     await callback.answer()
     await _send_question(callback, callback.from_user.id, state, selected_pack=pack)
 
@@ -115,8 +116,11 @@ async def cb_next_question(callback: CallbackQuery, state: FSMContext) -> None:
         repo = Repository(session)
         await repo.mark_question_skipped(log_id)
 
+    data = await state.get_data()
+    current_pack = data.get("current_pack")
+
     await callback.answer()
-    await _send_question(callback, callback.from_user.id, state)
+    await _send_question(callback, callback.from_user.id, state, selected_pack=current_pack)
 
 
 @router.callback_query(F.data.startswith("q_pause:"))
