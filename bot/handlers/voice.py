@@ -18,6 +18,7 @@ from bot.services.timeline import extract_timeline
 from bot.services.classifier import classify_chapter
 from bot.services.style_profiler import update_style_profile
 from bot.services.character_extractor import extract_characters
+from bot.services.thread_summarizer import refresh_thread_summary
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -40,12 +41,13 @@ async def _process_and_preview(
     source_question_id: str | None = None,
     state: FSMContext | None = None,
 ) -> None:
-    """Shared pipeline: clean → edit → timeline → classify → preview."""
+    """Shared pipeline: clean → classify → edit (with thread_summary) → preview."""
     processing_msg = await message.answer("⏳ Обрабатываю текст…")
 
     cleaned = await clean_transcript(raw_transcript)
     await processing_msg.edit_text("⏳ Редактирую для книги…")
 
+    # Fetch author context + chapters in one session
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_or_create_user(
@@ -56,27 +58,34 @@ async def _process_and_preview(
         known_characters = await repo.get_characters(user.id)
         known_places = await repo.get_places_with_counts(user.id)
         style_notes = await repo.get_style_notes(user.id)
+        chapters = await repo.get_chapters(user.id)
 
-    edited = await edit_memoir(cleaned, known_characters, known_places, style_notes)
+    # Classify on cleaned text first — needed to fetch chapter thread_summary for editing
+    chapter_suggestion = None
+    thread_summary = None
+    if chapters:
+        chapters_dicts = [
+            {"title": ch.title, "period_hint": ch.period_hint or ""}
+            for ch in chapters
+        ]
+        classification = await classify_chapter(
+            cleaned,
+            {"type": "unknown", "value": ""},
+            chapters_dicts,
+        )
+        chapter_suggestion = classification.get("chapter_suggestion")
+        if chapter_suggestion:
+            for ch in chapters:
+                if ch.title == chapter_suggestion:
+                    thread_summary = ch.thread_summary
+                    break
+
+    edited = await edit_memoir(cleaned, known_characters, known_places, style_notes, thread_summary)
     time_hint = await extract_timeline(edited.get("edited_memoir_text", cleaned))
 
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_user(message.from_user.id)
-        chapters = await repo.get_chapters(user.id)
-
-        chapter_suggestion = None
-        if chapters:
-            chapters_dicts = [
-                {"title": ch.title, "period_hint": ch.period_hint or ""}
-                for ch in chapters
-            ]
-            classification = await classify_chapter(
-                edited.get("edited_memoir_text", cleaned),
-                {"type": time_hint.get("type", "unknown"), "value": time_hint.get("value", "")},
-                chapters_dicts,
-            )
-            chapter_suggestion = classification.get("chapter_suggestion")
 
         memory = await repo.create_memory(
             user_id=user.id,
@@ -312,6 +321,19 @@ async def _refresh_characters(user_id: int, memory_text: str) -> None:
         logger.error("Character extraction error: %s", e)
 
 
+async def _refresh_thread_summary(chapter_id: int, chapter_title: str, memory_text: str) -> None:
+    """Update the chapter's running thread summary after a memory is approved."""
+    try:
+        async with async_session() as session:
+            repo = Repository(session)
+            existing = await repo.get_thread_summary(chapter_id)
+            updated = await refresh_thread_summary(chapter_title, existing, memory_text)
+            if updated:
+                await repo.update_thread_summary(chapter_id, updated)
+    except Exception as e:
+        logger.error("Thread summary update error: %s", e)
+
+
 # ── Inline callbacks for memory actions ──
 
 @router.callback_query(F.data.startswith("mem_save:"))
@@ -344,6 +366,7 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
             text = memory.edited_memoir_text or ""
             asyncio.create_task(_refresh_style_profile(user.id, text))
             asyncio.create_task(_refresh_characters(user.id, text))
+            asyncio.create_task(_refresh_thread_summary(chapters[0].id, chapters[0].title, text))
         else:
             chapters_dicts = [{"id": ch.id, "title": ch.title} for ch in chapters]
             await callback.message.edit_reply_markup(
@@ -371,6 +394,7 @@ async def cb_move_to_chapter(callback: CallbackQuery) -> None:
     text = memory.edited_memoir_text or ""
     asyncio.create_task(_refresh_style_profile(user.id, text))
     asyncio.create_task(_refresh_characters(user.id, text))
+    asyncio.create_task(_refresh_thread_summary(chapter_id, chapter.title, text))
 
     await callback.message.edit_text(
         f"{callback.message.text}\n\n"
@@ -507,6 +531,7 @@ async def handle_new_chapter_name(message: Message, state: FSMContext) -> None:
 
     asyncio.create_task(_refresh_style_profile(user.id, mem_text))
     asyncio.create_task(_refresh_characters(user.id, mem_text))
+    asyncio.create_task(_refresh_thread_summary(chapter.id, chapter_title, mem_text))
 
     await message.answer(
         f"✅ Создана глава «{chapter_title}» и воспоминание сохранено!\n"

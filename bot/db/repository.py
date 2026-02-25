@@ -122,6 +122,18 @@ class Repository:
         )
         await self.session.commit()
 
+    async def get_thread_summary(self, chapter_id: int) -> str | None:
+        result = await self.session.execute(
+            select(Chapter.thread_summary).where(Chapter.id == chapter_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_thread_summary(self, chapter_id: int, summary: str) -> None:
+        await self.session.execute(
+            update(Chapter).where(Chapter.id == chapter_id).values(thread_summary=summary)
+        )
+        await self.session.commit()
+
     async def delete_chapter(self, chapter_id: int) -> None:
         await self.session.execute(
             update(Memory).where(Memory.chapter_id == chapter_id).values(chapter_id=None)

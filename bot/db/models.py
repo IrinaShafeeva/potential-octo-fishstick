@@ -48,6 +48,7 @@ class Chapter(Base):
     period_hint = Column(String(255), nullable=True)
     order_index = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+    thread_summary = Column(Text, nullable=True)  # running digest of chapter content
 
     user = relationship("User", back_populates="chapters")
     memories = relationship("Memory", back_populates="chapter")

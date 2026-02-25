@@ -19,6 +19,14 @@ async def init_db() -> None:
             )
         except Exception:
             pass  # Column already exists — ignore
+        try:
+            await conn.execute(
+                __import__("sqlalchemy").text(
+                    "ALTER TABLE chapters ADD COLUMN thread_summary TEXT"
+                )
+            )
+        except Exception:
+            pass  # Column already exists — ignore
 
 
 async def get_session() -> AsyncSession:
