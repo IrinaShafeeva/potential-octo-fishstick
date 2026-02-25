@@ -90,7 +90,7 @@ class Character(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(255), nullable=False)       # canonical name, e.g. "Мария"
     aliases = Column(JSON, default=list)             # ["Маша", "жена", "мама Маша"]
-    relationship = Column(String(255), nullable=True)  # "жена", "дядя", "сосед"
+    relation_to_author = Column("relationship", String(255), nullable=True)  # "жена", "дядя", "сосед"
     description = Column(Text, nullable=True)        # brief context snippet
     mention_count = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)

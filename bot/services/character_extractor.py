@@ -89,7 +89,7 @@ def format_characters_for_editor(characters: list) -> str:
         # Support both ORM objects and dicts
         name = c.name if hasattr(c, "name") else c.get("name", "?")
         relationship = (
-            c.relationship if hasattr(c, "relationship") else c.get("relationship")
+            c.relation_to_author if hasattr(c, "relation_to_author") else c.get("relationship")
         )
         description = (
             c.description if hasattr(c, "description") else c.get("description")

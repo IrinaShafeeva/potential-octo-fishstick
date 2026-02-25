@@ -527,8 +527,8 @@ class Repository:
         if char:
             char.mention_count += 1
             char.last_seen_at = datetime.utcnow()
-            if relationship and not char.relationship:
-                char.relationship = relationship
+            if relationship and not char.relation_to_author:
+                char.relation_to_author = relationship
             if description and not char.description:
                 char.description = description
             if aliases:
@@ -539,7 +539,7 @@ class Repository:
             char = Character(
                 user_id=user_id,
                 name=name,
-                relationship=relationship,
+                relation_to_author=relationship,
                 description=description,
                 aliases=aliases or [],
                 mention_count=1,

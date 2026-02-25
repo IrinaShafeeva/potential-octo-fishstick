@@ -301,7 +301,7 @@ async def _refresh_characters(user_id: int, memory_text: str) -> None:
             existing_dicts = [
                 {
                     "name": c.name,
-                    "relationship": c.relationship,
+                    "relationship": c.relation_to_author,
                     "description": c.description,
                 }
                 for c in existing
