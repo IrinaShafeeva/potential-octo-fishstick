@@ -234,11 +234,21 @@ async def handle_edit_text(message: Message, state: FSMContext) -> None:
     async with async_session() as session:
         repo = Repository(session)
         await repo.update_memory_text(memory_id, new_text)
+        memory = await repo.get_memory(memory_id)
+        already_saved = memory and memory.approved
 
-    await message.answer(
-        f"✅ Текст обновлён!\n\n{new_text[:500]}{'…' if len(new_text) > 500 else ''}",
-        reply_markup=main_menu_kb(),
-    )
+    from bot.keyboards.inline_memory import saved_memory_kb
+    preview = new_text[:800] + ("…" if len(new_text) > 800 else "")
+    if already_saved:
+        await message.answer(
+            f"✅ Текст обновлён!\n\n{preview}",
+            reply_markup=saved_memory_kb(memory_id),
+        )
+    else:
+        await message.answer(
+            f"✅ Текст обновлён! Сохранить в книгу?\n\n{preview}",
+            reply_markup=memory_preview_kb(memory_id),
+        )
 
 
 # ── Button: record prompt ──
