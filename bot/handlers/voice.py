@@ -30,6 +30,7 @@ class MemoryStates(StatesGroup):
     waiting_edit_text = State()
     waiting_text_memory = State()
     waiting_clarification = State()
+    waiting_new_chapter = State()
 
 
 async def _process_and_preview(
@@ -380,7 +381,10 @@ async def cb_move_to_chapter(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("mem_new_ch:"))
-async def cb_new_chapter_for_memory(callback: CallbackQuery) -> None:
+async def cb_new_chapter_for_memory(callback: CallbackQuery, state: FSMContext) -> None:
+    memory_id = int(callback.data.split(":")[1])
+    await state.set_state(MemoryStates.waiting_new_chapter)
+    await state.update_data(new_chapter_memory_id=memory_id)
     await callback.message.answer("Напишите название новой главы:")
     await callback.answer()
 
@@ -465,6 +469,72 @@ async def handle_clarification(message: Message, state: FSMContext) -> None:
         f"✅ Готово! Вот обновлённый текст:\n\n{preview}\n\nСохранить?",
         reply_markup=memory_preview_kb(memory_id),
     )
+
+
+# ── New chapter name input ──
+
+@router.message(F.text, MemoryStates.waiting_new_chapter)
+async def handle_new_chapter_name(message: Message, state: FSMContext) -> None:
+    """User typed a new chapter title — create chapter and save the memory."""
+    data = await state.get_data()
+    memory_id = data.get("new_chapter_memory_id")
+    await state.clear()
+
+    if not memory_id:
+        await message.answer("Не удалось определить воспоминание. Попробуйте снова.")
+        return
+
+    chapter_title = message.text.strip()
+    if len(chapter_title) < 2:
+        await message.answer("Название главы слишком короткое.")
+        return
+
+    async with async_session() as session:
+        repo = Repository(session)
+        user = await repo.get_user(message.from_user.id)
+        if not user:
+            await message.answer("Пользователь не найден.")
+            return
+        chapter = await repo.create_chapter(user.id, chapter_title)
+        await repo.approve_memory(memory_id, chapter.id)
+        new_count = await repo.increment_memories_count(user.id)
+        memory = await repo.get_memory(memory_id)
+        if memory:
+            await repo.update_topic_coverage(user.id, memory.tags or [])
+            mem_text = memory.edited_memoir_text or ""
+        else:
+            mem_text = ""
+
+    asyncio.create_task(_refresh_style_profile(user.id, mem_text))
+    asyncio.create_task(_refresh_characters(user.id, mem_text))
+
+    await message.answer(
+        f"✅ Создана глава «{chapter_title}» и воспоминание сохранено!\n"
+        f"📊 Всего воспоминаний: {new_count}"
+    )
+
+
+# ── Back button from chapter select ──
+
+@router.callback_query(F.data.startswith("mem_back:"))
+async def cb_mem_back(callback: CallbackQuery) -> None:
+    """Restore the original memory keyboard (saved or unsaved)."""
+    memory_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+
+    if not memory:
+        await callback.answer("Воспоминание не найдено")
+        return
+
+    from bot.keyboards.inline_memory import saved_memory_kb
+    if memory.approved:
+        await callback.message.edit_reply_markup(reply_markup=saved_memory_kb(memory_id))
+    else:
+        await callback.message.edit_reply_markup(reply_markup=memory_preview_kb(memory_id))
+    await callback.answer()
 
 
 # ── Catch-all: plain text treated as a memory (lowest priority) ──

@@ -32,7 +32,7 @@ def chapter_select_kb(chapters: list[dict], memory_id: int) -> InlineKeyboardMar
         InlineKeyboardButton(text="📁 Новая глава", callback_data=f"mem_new_ch:{memory_id}"),
     ])
     buttons.append([
-        InlineKeyboardButton(text="🔙 Назад", callback_data=f"mem_save:{memory_id}"),
+        InlineKeyboardButton(text="🔙 Назад", callback_data=f"mem_back:{memory_id}"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
