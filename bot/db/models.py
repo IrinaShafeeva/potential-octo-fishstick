@@ -30,6 +30,7 @@ class User(Base):
     premium_until = Column(DateTime, nullable=True)
     memories_count = Column(Integer, default=0)
     questions_asked_count = Column(Integer, default=0)
+    style_notes = Column(Text, nullable=True)  # cumulative author style profile
 
     chapters = relationship("Chapter", back_populates="user", cascade="all, delete-orphan")
     memories = relationship("Memory", back_populates="user", cascade="all, delete-orphan")

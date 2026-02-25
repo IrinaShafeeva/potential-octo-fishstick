@@ -10,6 +10,15 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Safe migration: add style_notes column if it doesn't exist yet
+        try:
+            await conn.execute(
+                __import__("sqlalchemy").text(
+                    "ALTER TABLE users ADD COLUMN style_notes TEXT"
+                )
+            )
+        except Exception:
+            pass  # Column already exists — ignore
 
 
 async def get_session() -> AsyncSession:

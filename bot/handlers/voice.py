@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from aiogram import Router, F
@@ -15,6 +16,7 @@ from bot.services.stt import transcribe_voice
 from bot.services.ai_editor import clean_transcript, edit_memoir, merge_clarification
 from bot.services.timeline import extract_timeline
 from bot.services.classifier import classify_chapter
+from bot.services.style_profiler import update_style_profile
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -49,10 +51,11 @@ async def _process_and_preview(
             username=message.from_user.username,
             first_name=message.from_user.first_name,
         )
-        known_people = await repo.get_known_people(user.id)
-        known_places = await repo.get_known_places(user.id)
+        known_people = await repo.get_people_with_counts(user.id)
+        known_places = await repo.get_places_with_counts(user.id)
+        style_notes = await repo.get_style_notes(user.id)
 
-    edited = await edit_memoir(cleaned, known_people, known_places)
+    edited = await edit_memoir(cleaned, known_people, known_places, style_notes)
     time_hint = await extract_timeline(edited.get("edited_memoir_text", cleaned))
 
     async with async_session() as session:
@@ -263,6 +266,21 @@ async def prompt_record(message: Message, state: FSMContext) -> None:
     )
 
 
+# ── Helpers ──
+
+async def _refresh_style_profile(user_id: int, memory_text: str) -> None:
+    """Update the author's style profile in the background after a memory is approved."""
+    try:
+        async with async_session() as session:
+            repo = Repository(session)
+            existing = await repo.get_style_notes(user_id)
+            updated = await update_style_profile(existing, memory_text)
+            if updated:
+                await repo.update_style_notes(user_id, updated)
+    except Exception as e:
+        logger.error("Style profile update error: %s", e)
+
+
 # ── Inline callbacks for memory actions ──
 
 @router.callback_query(F.data.startswith("mem_save:"))
@@ -292,6 +310,9 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
                 f"✅ Сохранено в главу «{chapters[0].title}»\n"
                 f"📊 Всего воспоминаний: {new_count}",
             )
+            asyncio.create_task(
+                _refresh_style_profile(user.id, memory.edited_memoir_text or "")
+            )
         else:
             chapters_dicts = [{"id": ch.id, "title": ch.title} for ch in chapters]
             await callback.message.edit_reply_markup(
@@ -315,6 +336,10 @@ async def cb_move_to_chapter(callback: CallbackQuery) -> None:
         memory = await repo.get_memory(memory_id)
         chapter = await repo.get_chapter(chapter_id)
         await repo.update_topic_coverage(user.id, memory.tags or [])
+
+    asyncio.create_task(
+        _refresh_style_profile(user.id, memory.edited_memoir_text or "")
+    )
 
     await callback.message.edit_text(
         f"{callback.message.text}\n\n"

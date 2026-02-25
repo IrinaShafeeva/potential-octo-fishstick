@@ -58,6 +58,18 @@ class Repository:
             return False
         return True
 
+    async def get_style_notes(self, user_id: int) -> str | None:
+        result = await self.session.execute(
+            select(User.style_notes).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_style_notes(self, user_id: int, notes: str) -> None:
+        await self.session.execute(
+            update(User).where(User.id == user_id).values(style_notes=notes)
+        )
+        await self.session.commit()
+
     async def increment_memories_count(self, user_id: int) -> int:
         await self.session.execute(
             update(User)
@@ -313,11 +325,13 @@ class Repository:
                 Memory.user_id == user_id, Memory.approved == True
             )
         )
-        people = set()
+        counts: dict[str, int] = {}
         for row in result.scalars().all():
             if row:
-                people.update(row)
-        return sorted(people)
+                for name in row:
+                    counts[name] = counts.get(name, 0) + 1
+        # Return sorted by frequency descending so most important people come first
+        return [name for name, _ in sorted(counts.items(), key=lambda x: -x[1])]
 
     async def get_known_places(self, user_id: int) -> list[str]:
         result = await self.session.execute(
@@ -325,11 +339,41 @@ class Repository:
                 Memory.user_id == user_id, Memory.approved == True
             )
         )
-        places = set()
+        counts: dict[str, int] = {}
         for row in result.scalars().all():
             if row:
-                places.update(row)
-        return sorted(places)
+                for place in row:
+                    counts[place] = counts.get(place, 0) + 1
+        # Return sorted by frequency descending
+        return [place for place, _ in sorted(counts.items(), key=lambda x: -x[1])]
+
+    async def get_people_with_counts(self, user_id: int) -> list[tuple[str, int]]:
+        """Returns (name, mention_count) sorted by frequency — for rich editor context."""
+        result = await self.session.execute(
+            select(Memory.people).where(
+                Memory.user_id == user_id, Memory.approved == True
+            )
+        )
+        counts: dict[str, int] = {}
+        for row in result.scalars().all():
+            if row:
+                for name in row:
+                    counts[name] = counts.get(name, 0) + 1
+        return sorted(counts.items(), key=lambda x: -x[1])
+
+    async def get_places_with_counts(self, user_id: int) -> list[tuple[str, int]]:
+        """Returns (place, mention_count) sorted by frequency — for rich editor context."""
+        result = await self.session.execute(
+            select(Memory.places).where(
+                Memory.user_id == user_id, Memory.approved == True
+            )
+        )
+        counts: dict[str, int] = {}
+        for row in result.scalars().all():
+            if row:
+                for place in row:
+                    counts[place] = counts.get(place, 0) + 1
+        return sorted(counts.items(), key=lambda x: -x[1])
 
     # ── Progress ──
 
