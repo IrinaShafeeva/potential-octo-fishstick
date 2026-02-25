@@ -1,8 +1,7 @@
 import logging
-import os
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.types import Message, CallbackQuery, BufferedInputFile
 
 from bot.db.engine import async_session
 from bot.db.repository import Repository
@@ -146,14 +145,14 @@ async def cb_export_pdf(callback: CallbackQuery) -> None:
         await callback.message.answer("В книге пока нет воспоминаний.")
         return
 
-    filepath = await export_book_pdf(
+    pdf_bytes = await export_book_pdf(
         chapters_data,
         author_name=user.first_name or "Автор",
         user_id=user.id,
     )
 
-    if filepath and os.path.exists(filepath):
-        doc = FSInputFile(filepath, filename="Моя_книга_воспоминаний.pdf")
+    if pdf_bytes:
+        doc = BufferedInputFile(pdf_bytes, filename="Моя_книга_воспоминаний.pdf")
         await callback.message.answer_document(doc, caption="📖 Ваша книга воспоминаний")
     else:
         await callback.message.answer("Не удалось создать PDF. Попробуйте позже.")

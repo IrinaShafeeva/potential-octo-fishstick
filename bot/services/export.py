@@ -1,5 +1,5 @@
-import os
 import logging
+from io import BytesIO
 from pathlib import Path
 
 from fpdf import FPDF
@@ -7,8 +7,6 @@ from fpdf import FPDF
 logger = logging.getLogger(__name__)
 
 FONTS_DIR = Path(__file__).parent.parent / "fonts"
-EXPORT_DIR = Path("data") / "exports"
-EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class MemoirPDF(FPDF):
@@ -69,8 +67,8 @@ async def export_book_pdf(
     chapters_data: list[dict],
     author_name: str = "",
     user_id: int = 0,
-) -> str:
-    """Export book to PDF. Returns file path.
+) -> bytes | None:
+    """Export book to PDF. Returns PDF bytes (no disk I/O).
 
     chapters_data: [{"title": str, "period_hint": str, "memories": [{"title": str, "text": str}]}]
     """
@@ -99,13 +97,11 @@ async def export_book_pdf(
             if i < len(chapter["memories"]) - 1:
                 pdf.separator()
 
-    filename = f"memoir_{user_id}.pdf"
-    filepath = str(EXPORT_DIR / filename)
-
     try:
-        pdf.output(filepath)
-        logger.info("PDF exported: %s", filepath)
-        return filepath
+        buf = BytesIO()
+        pdf.output(buf)
+        logger.info("PDF generated in memory for user_id=%d (%d bytes)", user_id, buf.tell())
+        return buf.getvalue()
     except Exception as e:
         logger.error("PDF export error: %s", e)
-        return ""
+        return None

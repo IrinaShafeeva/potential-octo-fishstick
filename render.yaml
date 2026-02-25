@@ -1,0 +1,60 @@
+services:
+  - type: web
+    name: memoir-bot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # Injected automatically from the Render PostgreSQL instance below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: memoir-db
+          property: connectionString
+
+      # Set these manually in Render dashboard → Environment
+      - key: BOT_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ADMIN_TELEGRAM_ID
+        sync: false
+
+      # Tribute payment (leave empty if not using)
+      - key: TRIBUTE_API_KEY
+        sync: false
+      - key: TRIBUTE_WEBHOOK_SECRET
+        sync: false
+      - key: TRIBUTE_PRODUCT_LINK
+        sync: false
+      - key: TRIBUTE_FAMILY_PRODUCT_LINK
+        sync: false
+
+      # Webhook server — must match Render's PORT (10000)
+      - key: WEBHOOK_HOST
+        value: 0.0.0.0
+      - key: WEBHOOK_PORT
+        value: 10000
+
+      # AI models
+      - key: EDITOR_MODEL
+        value: gpt-4o
+      - key: FAST_MODEL
+        value: gpt-4o-mini
+      - key: WHISPER_MODEL
+        value: whisper-1
+
+      # Free tier limits
+      - key: FREE_MEMORIES_LIMIT
+        value: 5
+      - key: FREE_CHAPTERS_LIMIT
+        value: 1
+      - key: FREE_QUESTIONS_LIMIT
+        value: 3
+      - key: PREMIUM_DAYS
+        value: 90
+
+databases:
+  - name: memoir-db
+    databaseName: memoir_bot
+    user: memoir
+    plan: free

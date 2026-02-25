@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -10,6 +11,16 @@ class Settings(BaseSettings):
     whisper_model: str = "whisper-1"
 
     database_url: str = "postgresql+asyncpg://memoir:memoir@localhost:5432/memoir_bot"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def fix_database_url(cls, v: str) -> str:
+        # Render provides postgres:// or postgresql:// — asyncpg needs the +asyncpg dialect
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://") and "+asyncpg" not in v:
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     free_memories_limit: int = 5
     free_chapters_limit: int = 1
