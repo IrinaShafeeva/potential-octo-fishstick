@@ -13,7 +13,7 @@ from bot.keyboards.inline_memory import memory_preview_kb, chapter_select_kb
 from bot.keyboards.main_menu import main_menu_kb
 from bot.loader import bot
 from bot.services.stt import transcribe_voice
-from bot.services.ai_editor import clean_transcript, edit_memoir, merge_clarification
+from bot.services.ai_editor import clean_transcript, edit_memoir
 from bot.services.timeline import extract_timeline
 from bot.services.classifier import classify_chapter
 from bot.services.style_profiler import update_style_profile
@@ -32,6 +32,7 @@ class MemoryStates(StatesGroup):
     waiting_text_memory = State()
     waiting_clarification = State()
     waiting_new_chapter = State()
+    waiting_retell = State()
 
 
 async def _process_and_preview(
@@ -141,7 +142,7 @@ async def _pipeline(
         )
         await message.answer(
             f"💬 {edited['clarification_question']}\n\n"
-            "Ответьте — я дополню воспоминание и предложу сохранить."
+            "Ответьте — а потом я попрошу вас пересказать историю целиком со всеми деталями."
         )
         if state:
             await state.set_state(MemoryStates.waiting_clarification)
@@ -479,40 +480,54 @@ async def cb_split_memory(callback: CallbackQuery) -> None:
 
 @router.message(F.text, MemoryStates.waiting_clarification)
 async def handle_clarification(message: Message, state: FSMContext) -> None:
-    """User answered the clarification question — append to memory and show save buttons."""
+    """User answered the clarification question — ask them to retell the full story."""
     data = await state.get_data()
     memory_id = data.get("clarification_memory_id")
-    await state.clear()
+    answering_question_id = data.get("answering_question_id")
+    answering_question_log_id = data.get("answering_question_log_id")
 
     if not memory_id:
+        await state.clear()
         await message.answer("Не удалось найти воспоминание. Попробуйте записать заново.")
         return
 
     addition = message.text.strip()
     if len(addition) < 5:
-        await message.answer(
-            "Слишком коротко. Расскажите чуть подробнее.",
-            reply_markup=memory_preview_kb(memory_id),
-        )
+        await message.answer("Слишком коротко. Расскажите чуть подробнее.")
         return
 
-    merging_msg = await message.answer("⏳ Встраиваю уточнение в текст…")
+    # Transition to retell state — preserve question tracking so the retell pipeline
+    # can mark the question as answered when the new memory is saved.
+    await state.set_state(MemoryStates.waiting_retell)
+    await state.update_data(
+        retell_old_memory_id=memory_id,
+        answering_question_id=answering_question_id,
+        answering_question_log_id=answering_question_log_id,
+    )
 
-    async with async_session() as session:
-        repo = Repository(session)
-        memory = await repo.get_memory(memory_id)
-        if not memory:
-            await merging_msg.edit_text("Воспоминание не найдено.")
-            return
-        merged = await merge_clarification(
-            memory.edited_memoir_text or "", addition
-        )
-        await repo.update_memory_text(memory_id, merged)
+    await message.answer(
+        "Спасибо за уточнение!\n\n"
+        "Теперь расскажите всю историю заново — уже со всеми подробностями, которые вспомнили. "
+        "Говорите свободно, можно голосом или текстом. "
+        "Я оформлю это как полноценное воспоминание. 🎙"
+    )
 
-    preview = merged[:1500] + ("…" if len(merged) > 1500 else "")
-    await merging_msg.edit_text(
-        f"✅ Готово! Вот обновлённый текст:\n\n{preview}\n\nСохранить?",
-        reply_markup=memory_preview_kb(memory_id),
+
+@router.message(F.text, MemoryStates.waiting_retell)
+async def handle_retell_text(message: Message, state: FSMContext) -> None:
+    """User retells the full story as text after clarification."""
+    text = message.text.strip()
+    if len(text) < 20:
+        await message.answer("Расскажите чуть подробнее — хотя бы пару предложений.")
+        return
+
+    data = await state.get_data()
+    source_question_id = data.get("answering_question_id")
+
+    await _process_and_preview(
+        message, text,
+        source_question_id=source_question_id,
+        state=state,
     )
 
 
