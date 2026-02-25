@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery, BufferedInputFile
 
 from bot.db.engine import async_session
 from bot.db.repository import Repository
+from bot.keyboards.inline_memory import saved_memory_kb
 from bot.keyboards.main_menu import main_menu_kb
 from bot.services.export import export_book_pdf
 
@@ -93,18 +94,14 @@ async def cb_show_chapter(callback: CallbackQuery) -> None:
         await callback.answer()
         return
 
-    text = f"📁 <b>{chapter.title}</b>\n\n"
+    await callback.message.answer(f"📁 <b>{chapter.title}</b> — {len(memories)} воспоминаний:")
     for i, mem in enumerate(memories, 1):
         title = mem.title or "Без названия"
-        snippet = (mem.edited_memoir_text or "")[:150]
-        if len(mem.edited_memoir_text or "") > 150:
-            snippet += "…"
-        text += f"<b>{i}. {title}</b>\n{snippet}\n\n"
+        full_text = mem.edited_memoir_text or ""
+        preview = full_text[:800] + ("…" if len(full_text) > 800 else "")
+        msg = f"<b>{i}. {title}</b>\n\n{preview}"
+        await callback.message.answer(msg, reply_markup=saved_memory_kb(mem.id))
 
-    if len(text) > 4000:
-        text = text[:4000] + "…"
-
-    await callback.message.answer(text)
     await callback.answer()
 
 

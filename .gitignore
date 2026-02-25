@@ -3,7 +3,7 @@ __pycache__/
 *$py.class
 .env
 *.db
-data/
+data/exports/
 *.egg-info/
 dist/
 build/

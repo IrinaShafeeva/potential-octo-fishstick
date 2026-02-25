@@ -1,0 +1,563 @@
+[
+  {
+    "id": "childhood_001",
+    "pack": "childhood",
+    "text": "Каким был дом, где вы жили в детстве? Что вы помните лучше всего?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["home", "childhood"],
+    "followups": ["Кто жил вместе с вами?", "Какая была обстановка: тепло, шумно, тихо?"]
+  },
+  {
+    "id": "childhood_002",
+    "pack": "childhood",
+    "text": "Во что вы играли в детстве? Какие игры были любимыми?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["games", "childhood"],
+    "followups": ["С кем вы обычно играли?", "Где чаще всего проходили игры — во дворе, дома?"]
+  },
+  {
+    "id": "childhood_003",
+    "pack": "childhood",
+    "text": "Каким был ваш двор? Кто там жил, с кем вы дружили?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["yard", "childhood", "friends"],
+    "followups": ["Была ли у вас компания ребят во дворе?", "Чем вы занимались летом?"]
+  },
+  {
+    "id": "childhood_004",
+    "pack": "childhood",
+    "text": "Помните ли вы свой первый день в школе? Как это было?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["school", "childhood"],
+    "followups": ["Кто вас провожал?", "Что вы чувствовали?"]
+  },
+  {
+    "id": "childhood_005",
+    "pack": "childhood",
+    "text": "Какая еда из детства вам запомнилась больше всего? Кто готовил?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["food", "childhood", "family"],
+    "followups": ["Были ли какие-то особенные блюда на праздники?"]
+  },
+  {
+    "id": "childhood_006",
+    "pack": "childhood",
+    "text": "Был ли у вас в детстве питомец или любимое животное?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["pets", "childhood"],
+    "followups": ["Как его звали?", "Что с ним связано?"]
+  },
+
+  {
+    "id": "parents_001",
+    "pack": "parents_home",
+    "text": "Расскажите о своей маме. Какой она была? Чем занималась?",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["mother", "family"],
+    "followups": ["Что она любила делать?", "Какая привычка мамы вам запомнилась?"]
+  },
+  {
+    "id": "parents_002",
+    "pack": "parents_home",
+    "text": "Расскажите о своём отце. Кем он работал? Какой у него был характер?",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["father", "family"],
+    "followups": ["Чему он вас научил?", "Как вы проводили время вместе?"]
+  },
+  {
+    "id": "parents_003",
+    "pack": "parents_home",
+    "text": "Были ли у вас братья или сёстры? Расскажите о них.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["siblings", "family"],
+    "followups": ["Ладили ли вы в детстве?", "Чем они сейчас занимаются?"]
+  },
+  {
+    "id": "parents_004",
+    "pack": "parents_home",
+    "text": "Помните ли вы своих бабушек и дедушек? Какими они были?",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["grandparents", "family"],
+    "followups": ["Где они жили?", "Что вы вместе делали?"]
+  },
+  {
+    "id": "parents_005",
+    "pack": "parents_home",
+    "text": "Какие семейные традиции были в вашей семье, когда вы росли?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["traditions", "family"],
+    "followups": ["Какие праздники отмечали?", "Собирались ли всей семьёй за столом?"]
+  },
+
+  {
+    "id": "school_001",
+    "pack": "school",
+    "text": "Кто был вашим любимым учителем в школе? Почему?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["school", "teacher"],
+    "followups": ["Какой предмет он или она вели?", "Что особенного в этом человеке?"]
+  },
+  {
+    "id": "school_002",
+    "pack": "school",
+    "text": "Был ли у вас в школе лучший друг или подруга? Расскажите о нём/ней.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["school", "friends"],
+    "followups": ["Вы поддерживаете связь?", "Какая история с ним/ней вам запомнилась?"]
+  },
+  {
+    "id": "school_003",
+    "pack": "school",
+    "text": "Какой предмет в школе вам нравился больше всего, а какой — нет?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["school", "study"],
+    "followups": ["Почему именно этот?", "Пригодилось ли это потом в жизни?"]
+  },
+  {
+    "id": "school_004",
+    "pack": "school",
+    "text": "Был ли в школе какой-то смешной или необычный случай, который вы помните до сих пор?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["school", "stories"],
+    "followups": ["Кто ещё это помнит?", "Как отреагировали учителя?"]
+  },
+  {
+    "id": "school_005",
+    "pack": "school",
+    "text": "Чем вы занимались после уроков — кружки, секции, гуляли?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["school", "hobbies"],
+    "followups": ["Долго ли вы этим занимались?", "Что это вам дало?"]
+  },
+
+  {
+    "id": "youth_001",
+    "pack": "youth",
+    "text": "Куда вы поступили после школы? Как выбирали, кем стать?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["education", "youth"],
+    "followups": ["Кто повлиял на ваш выбор?", "Жалели ли вы потом о выборе?"]
+  },
+  {
+    "id": "youth_002",
+    "pack": "youth",
+    "text": "Какой была ваша первая самостоятельная жизнь — общежитие, съёмная квартира?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["independence", "youth"],
+    "followups": ["С кем вы жили?", "Что было самым сложным?"]
+  },
+  {
+    "id": "youth_003",
+    "pack": "youth",
+    "text": "Какая музыка, фильмы или книги были важны для вас в молодости?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["culture", "youth"],
+    "followups": ["Почему именно это?", "Слушаете/смотрите ли вы это сейчас?"]
+  },
+  {
+    "id": "youth_004",
+    "pack": "youth",
+    "text": "Была ли у вас мечта в молодости? О чём вы мечтали?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["dreams", "youth"],
+    "followups": ["Сбылась ли она?", "Как она менялась со временем?"]
+  },
+  {
+    "id": "youth_005",
+    "pack": "youth",
+    "text": "Расскажите о своих друзьях в студенческие годы или в армии.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["friends", "youth"],
+    "followups": ["Поддерживаете ли вы связь?", "Какой случай вспоминаете чаще всего?"]
+  },
+
+  {
+    "id": "work_001",
+    "pack": "work",
+    "text": "Какой была ваша первая работа? Как вы на неё попали?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["work", "career"],
+    "followups": ["Сколько вы там проработали?", "Что вам нравилось или не нравилось?"]
+  },
+  {
+    "id": "work_002",
+    "pack": "work",
+    "text": "Кем вы проработали дольше всего? Расскажите об этом.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["work", "career"],
+    "followups": ["Кто были ваши коллеги?", "Что было самым интересным в этой работе?"]
+  },
+  {
+    "id": "work_003",
+    "pack": "work",
+    "text": "Был ли у вас наставник или начальник, который вас многому научил?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["work", "mentor"],
+    "followups": ["Чему именно он вас научил?", "Поддерживали ли вы связь потом?"]
+  },
+  {
+    "id": "work_004",
+    "pack": "work",
+    "text": "Был ли на работе случай, которым вы гордитесь?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["work", "achievements"],
+    "followups": ["Что именно вы сделали?", "Оценили ли это другие?"]
+  },
+  {
+    "id": "work_005",
+    "pack": "work",
+    "text": "Если бы вы могли выбрать профессию заново — выбрали бы ту же?",
+    "difficulty": "medium",
+    "emotional_intensity": "low",
+    "tags": ["work", "reflection"],
+    "followups": ["Почему?", "Что бы вы изменили?"]
+  },
+
+  {
+    "id": "love_001",
+    "pack": "love",
+    "text": "Как вы познакомились со своей второй половинкой?",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["love", "meeting"],
+    "followups": ["Где это произошло?", "Что вас привлекло в этом человеке?"]
+  },
+  {
+    "id": "love_002",
+    "pack": "love",
+    "text": "Какой была ваша свадьба? Расскажите, как это было.",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["love", "wedding"],
+    "followups": ["Кто был на свадьбе?", "Что запомнилось больше всего?"]
+  },
+  {
+    "id": "love_003",
+    "pack": "love",
+    "text": "Как вы распределяли обязанности в семье? Кто что делал?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["love", "family_life"],
+    "followups": ["Были ли споры по этому поводу?"]
+  },
+  {
+    "id": "love_004",
+    "pack": "love",
+    "text": "Какое совместное путешествие или приключение вы вспоминаете с теплотой?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["love", "travel"],
+    "followups": ["Куда вы ездили?", "Что запомнилось?"]
+  },
+
+  {
+    "id": "children_001",
+    "pack": "children_family",
+    "text": "Расскажите о рождении вашего первого ребёнка. Как это было?",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["children", "birth"],
+    "followups": ["Какое имя выбрали и почему?", "Кто помогал вам в первое время?"]
+  },
+  {
+    "id": "children_002",
+    "pack": "children_family",
+    "text": "Какими были ваши дети в детстве? Что вы помните?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["children", "family"],
+    "followups": ["Чем они отличались друг от друга?", "Какие смешные случаи были?"]
+  },
+  {
+    "id": "children_003",
+    "pack": "children_family",
+    "text": "Что было самым сложным в воспитании детей?",
+    "difficulty": "medium",
+    "emotional_intensity": "medium",
+    "tags": ["children", "parenting"],
+    "followups": ["Как вы с этим справлялись?"]
+  },
+  {
+    "id": "children_004",
+    "pack": "children_family",
+    "text": "Есть ли у вас внуки? Расскажите о них.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["grandchildren", "family"],
+    "followups": ["Чем они увлекаются?", "На кого они похожи?"]
+  },
+  {
+    "id": "children_005",
+    "pack": "children_family",
+    "text": "Какой совет вы бы дали молодым родителям?",
+    "difficulty": "medium",
+    "emotional_intensity": "low",
+    "tags": ["children", "advice"],
+    "followups": ["Что бы вы сделали по-другому?"]
+  },
+
+  {
+    "id": "places_001",
+    "pack": "places",
+    "text": "В каких городах или сёлах вы жили? Расскажите о первом переезде.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["relocation", "places"],
+    "followups": ["Почему вы переехали?", "Что изменилось после переезда?"]
+  },
+  {
+    "id": "places_002",
+    "pack": "places",
+    "text": "Какой город или место вы считаете своим настоящим домом? Почему?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["home", "places"],
+    "followups": ["Что делает это место особенным?"]
+  },
+  {
+    "id": "places_003",
+    "pack": "places",
+    "text": "Помните ли вы, как менялся город вокруг вас за десятилетия?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["city", "changes"],
+    "followups": ["Что исчезло, о чём жалеете?", "Что стало лучше?"]
+  },
+  {
+    "id": "places_004",
+    "pack": "places",
+    "text": "Ездили ли вы когда-нибудь за границу? Расскажите об этом.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["travel", "abroad"],
+    "followups": ["Что вас удивило?", "Хотели бы вернуться?"]
+  },
+
+  {
+    "id": "hardships_001",
+    "pack": "hardships",
+    "text": "Был ли в вашей жизни момент, когда было особенно трудно, но вы справились?",
+    "difficulty": "medium",
+    "emotional_intensity": "medium",
+    "tags": ["hardships", "resilience"],
+    "followups": ["Кто вам помогал?", "Чему вас это научило?"]
+  },
+  {
+    "id": "hardships_002",
+    "pack": "hardships",
+    "text": "Как ваша семья пережила трудные времена — перестройку, 90-е?",
+    "difficulty": "medium",
+    "emotional_intensity": "medium",
+    "tags": ["hardships", "history"],
+    "followups": ["Что было самым сложным?", "Что помогало держаться?"]
+  },
+  {
+    "id": "hardships_003",
+    "pack": "hardships",
+    "text": "Приходилось ли вам резко менять жизнь — работу, город, привычки?",
+    "difficulty": "medium",
+    "emotional_intensity": "medium",
+    "tags": ["hardships", "changes"],
+    "followups": ["Что послужило причиной?"]
+  },
+
+  {
+    "id": "achievements_001",
+    "pack": "achievements",
+    "text": "Чем в своей жизни вы гордитесь больше всего?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["achievements", "pride"],
+    "followups": ["Как вы к этому пришли?"]
+  },
+  {
+    "id": "achievements_002",
+    "pack": "achievements",
+    "text": "Какой самый счастливый день в вашей жизни вы можете вспомнить?",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["happiness", "achievements"],
+    "followups": ["Что именно произошло?", "Кто был рядом?"]
+  },
+  {
+    "id": "achievements_003",
+    "pack": "achievements",
+    "text": "Получали ли вы когда-нибудь награду, грамоту, звание? За что?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["achievements", "awards"],
+    "followups": ["Что вы при этом чувствовали?"]
+  },
+  {
+    "id": "achievements_004",
+    "pack": "achievements",
+    "text": "Был ли момент, когда вы помогли кому-то и это изменило его жизнь?",
+    "difficulty": "medium",
+    "emotional_intensity": "medium",
+    "tags": ["kindness", "achievements"],
+    "followups": ["Что произошло?"]
+  },
+
+  {
+    "id": "traditions_001",
+    "pack": "traditions",
+    "text": "Как в вашей семье отмечали Новый год? Что было на столе?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["holidays", "traditions", "food"],
+    "followups": ["Кто собирался?", "Была ли ёлка?"]
+  },
+  {
+    "id": "traditions_002",
+    "pack": "traditions",
+    "text": "Какое блюдо вы умеете готовить лучше всего? Кто вас научил?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["food", "cooking", "traditions"],
+    "followups": ["Как его готовить?", "Готовите ли вы его сейчас?"]
+  },
+  {
+    "id": "traditions_003",
+    "pack": "traditions",
+    "text": "Были ли у вас семейные ритуалы — воскресные обеды, походы, дача?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["traditions", "family"],
+    "followups": ["Как часто вы это делали?", "Продолжаете ли сейчас?"]
+  },
+  {
+    "id": "traditions_004",
+    "pack": "traditions",
+    "text": "Расскажите про дачу или огород, если у вас был. Что выращивали?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["dacha", "traditions"],
+    "followups": ["Кто больше всего любил там бывать?"]
+  },
+  {
+    "id": "traditions_005",
+    "pack": "traditions",
+    "text": "Какой праздник вы любили больше всего — день рождения, 8 Марта, Пасху?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["holidays", "traditions"],
+    "followups": ["Почему именно этот?", "Как его отмечали?"]
+  },
+
+  {
+    "id": "favorites_001",
+    "pack": "favorites",
+    "text": "Есть ли у вас любимое место — в городе, на природе? Расскажите о нём.",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["places", "favorites"],
+    "followups": ["Почему оно для вас особенное?", "Часто ли вы там бывали?"]
+  },
+  {
+    "id": "favorites_002",
+    "pack": "favorites",
+    "text": "Какая песня или мелодия напоминает вам о чём-то важном?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["music", "favorites"],
+    "followups": ["О чём она вам напоминает?"]
+  },
+  {
+    "id": "favorites_003",
+    "pack": "favorites",
+    "text": "Была ли у вас вещь, которую вы хранили много лет? Что это?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["things", "favorites"],
+    "followups": ["Откуда она у вас?", "Сохранилась ли она?"]
+  },
+  {
+    "id": "favorites_004",
+    "pack": "favorites",
+    "text": "Есть ли фотография, которая для вас очень дорога? Что на ней?",
+    "difficulty": "easy",
+    "emotional_intensity": "medium",
+    "tags": ["photos", "favorites"],
+    "followups": ["Когда и где она была сделана?"]
+  },
+  {
+    "id": "favorites_005",
+    "pack": "favorites",
+    "text": "Какое у вас было хобби или увлечение, которому вы посвящали много времени?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["hobbies", "favorites"],
+    "followups": ["Как вы к этому пришли?", "Занимаетесь ли сейчас?"]
+  },
+
+  {
+    "id": "later_001",
+    "pack": "later_years",
+    "text": "Как изменилась ваша жизнь после выхода на пенсию?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["retirement", "later_years"],
+    "followups": ["Чем вы занимаетесь?", "Что нравится в этом времени?"]
+  },
+  {
+    "id": "later_002",
+    "pack": "later_years",
+    "text": "Что вас удивляет в современном мире? Что изменилось больше всего?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["modernity", "later_years"],
+    "followups": ["Что нравится?", "Чего не хватает из прошлого?"]
+  },
+  {
+    "id": "later_003",
+    "pack": "later_years",
+    "text": "Что бы вы хотели, чтобы ваши внуки узнали о вашей жизни?",
+    "difficulty": "medium",
+    "emotional_intensity": "medium",
+    "tags": ["legacy", "later_years"],
+    "followups": ["Какой урок из вашей жизни самый важный?"]
+  },
+  {
+    "id": "later_004",
+    "pack": "later_years",
+    "text": "Если бы вы написали письмо себе молодому — что бы вы сказали?",
+    "difficulty": "medium",
+    "emotional_intensity": "medium",
+    "tags": ["reflection", "later_years"],
+    "followups": ["О чём бы вы предупредили?", "За что бы похвалили?"]
+  },
+  {
+    "id": "later_005",
+    "pack": "later_years",
+    "text": "Какие простые радости в жизни вам дороги сейчас?",
+    "difficulty": "easy",
+    "emotional_intensity": "low",
+    "tags": ["happiness", "later_years"],
+    "followups": ["Изменилось ли ваше понимание счастья?"]
+  }
+]

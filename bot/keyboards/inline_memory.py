@@ -37,6 +37,18 @@ def chapter_select_kb(chapters: list[dict], memory_id: int) -> InlineKeyboardMar
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def saved_memory_kb(memory_id: int) -> InlineKeyboardMarkup:
+    """Actions for an already-saved memory (viewed from chapter)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
+                InlineKeyboardButton(text="🧷 В другую главу", callback_data=f"mem_move:{memory_id}"),
+            ],
+        ]
+    )
+
+
 def confirm_save_kb(memory_id: int, chapter_title: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
