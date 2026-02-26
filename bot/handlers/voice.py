@@ -335,10 +335,8 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
 async def handle_text_memory(message: Message, state: FSMContext) -> None:
     """User explicitly chose to write a memory as text."""
     text = message.text.strip()
-    if len(text) < 20:
-        await message.answer("Расскажите чуть подробнее — хотя бы пару предложений.")
-        return
 
+    # Check pending clarification FIRST — short answers are valid
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_or_create_user(
@@ -349,10 +347,16 @@ async def handle_text_memory(message: Message, state: FSMContext) -> None:
         pending = await repo.get_pending_clarification_memory(user.id)
         is_over_limit = not user.is_premium and user.memories_count >= settings.free_memories_limit
 
-    # If clarification is pending, treat this text as the answer (don't start new memory)
     if pending:
         await state.clear()
+        if len(text) < 2:
+            await message.answer("Напишите хотя бы пару слов.")
+            return
         await _handle_clarification_answer(message, state, text, pending)
+        return
+
+    if len(text) < 20:
+        await message.answer("Расскажите чуть подробнее — хотя бы пару предложений.")
         return
 
     if is_over_limit:
@@ -702,13 +706,8 @@ async def cb_mem_back(callback: CallbackQuery) -> None:
 async def catch_all_text(message: Message, state: FSMContext) -> None:
     """Any unrecognized text: first check for pending clarification, then process as new memory."""
     text = message.text.strip()
-    if len(text) < 20:
-        await message.answer(
-            "Расскажите чуть подробнее — хотя бы пару предложений. "
-            "Или нажмите «🎙 Записать воспоминание» в меню."
-        )
-        return
 
+    # Check pending clarification FIRST — short answers are valid for clarification
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_or_create_user(
@@ -719,9 +718,19 @@ async def catch_all_text(message: Message, state: FSMContext) -> None:
         pending = await repo.get_pending_clarification_memory(user.id)
         is_over_limit = not user.is_premium and user.memories_count >= settings.free_memories_limit
 
-    # Pending clarification takes priority — treat text as the answer
     if pending:
+        if len(text) < 2:
+            await message.answer("Напишите хотя бы пару слов.")
+            return
         await _handle_clarification_answer(message, state, text, pending)
+        return
+
+    # For new memories — require at least a couple of sentences
+    if len(text) < 20:
+        await message.answer(
+            "Расскажите чуть подробнее — хотя бы пару предложений. "
+            "Или нажмите «🎙 Записать воспоминание» в меню."
+        )
         return
 
     if is_over_limit:
