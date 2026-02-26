@@ -217,7 +217,26 @@ class Repository:
         return list(result.scalars().all())
 
     async def get_pending_clarification_memory(self, user_id: int) -> Optional["Memory"]:
-        """Return the most recent draft memory awaiting clarification for this user."""
+        """Return the most recent draft memory awaiting clarification for this user.
+
+        Only returns records created within the last 2 hours — older ones are considered
+        abandoned and are automatically cleared to prevent stale state.
+        """
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(hours=2)
+
+        # Clear stale pending records first
+        await self.session.execute(
+            update(Memory)
+            .where(
+                Memory.user_id == user_id,
+                Memory.clarification_round > 0,
+                Memory.created_at < cutoff,
+            )
+            .values(clarification_thread=None, clarification_round=0)
+        )
+        await self.session.commit()
+
         result = await self.session.execute(
             select(Memory)
             .where(Memory.user_id == user_id, Memory.clarification_round > 0)

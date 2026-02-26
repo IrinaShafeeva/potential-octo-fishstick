@@ -3,7 +3,7 @@ import json
 import logging
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 MIN_VOICE_DURATION = 3
 STT_CONFIDENCE_THRESHOLD = 0.3
 MAX_CLARIFICATION_ROUNDS = 3
+
+
+def _clarification_kb(memory_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⏭ Пропустить вопрос", callback_data=f"skip_clarif:{memory_id}"),
+    ]])
 
 
 class MemoryStates(StatesGroup):
@@ -76,7 +82,7 @@ async def _classify_chapter(cleaned: str, chapters: list) -> tuple[str | None, s
 
 
 async def _run_editor_and_preview(
-    message: Message,
+    message,  # Message or CallbackQuery.message (bot's message)
     processing_msg,
     memory_id: int,
     cleaned: str,
@@ -84,6 +90,8 @@ async def _run_editor_and_preview(
     source_question_id: str | None,
     state: FSMContext | None,
     ctx: dict,
+    *,
+    user_telegram_id: int | None = None,
 ) -> None:
     """Classify → edit (with QA context) → timeline → update memory → show preview."""
     chapter_suggestion, thread_summary = await _classify_chapter(cleaned, ctx["chapters"])
@@ -121,9 +129,11 @@ async def _run_editor_and_preview(
         if question_log_id:
             await repo.mark_question_answered(question_log_id, memory_id)
         elif source_question_id:
-            user = await repo.get_user(message.from_user.id)
-            if user:
-                await repo.mark_question_answered_by_source(user.id, source_question_id, memory_id)
+            tg_id = user_telegram_id or getattr(getattr(message, "from_user", None), "id", None)
+            if tg_id:
+                user = await repo.get_user(tg_id)
+                if user:
+                    await repo.mark_question_answered_by_source(user.id, source_question_id, memory_id)
 
     if state:
         await state.clear()
@@ -207,7 +217,7 @@ async def _pipeline(
         async with async_session() as session:
             repo = Repository(session)
             await repo.set_clarification_state(memory.id, thread, 1)
-        await processing_msg.edit_text(f"💬 {question}")
+        await processing_msg.edit_text(f"💬 {question}", reply_markup=_clarification_kb(memory.id))
         if state:
             await state.clear()
         return
@@ -242,7 +252,7 @@ async def _handle_clarification_answer(
             async with async_session() as session:
                 repo = Repository(session)
                 await repo.set_clarification_state(pending.id, thread, current_round + 1)
-            await processing_msg.edit_text(f"💬 {question}")
+            await processing_msg.edit_text(f"💬 {question}", reply_markup=_clarification_kb(pending.id))
             return
 
     # "История полная" or max rounds — compile and show preview
@@ -585,6 +595,38 @@ async def cb_move_memory(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("mem_split:"))
 async def cb_split_memory(callback: CallbackQuery) -> None:
     await callback.answer("Разбиение на истории — скоро будет доступно!", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("skip_clarif:"))
+async def cb_skip_clarification(callback: CallbackQuery, state: FSMContext) -> None:
+    """User skipped a clarification question — run editor on original transcript and show preview."""
+    memory_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+        if not memory:
+            await callback.answer("Воспоминание не найдено", show_alert=True)
+            return
+        await repo.clear_clarification_state(memory_id)
+        user = await repo.get_user(callback.from_user.id)
+        user_id = user.id
+
+    await callback.message.edit_text("⏳ Редактирую для книги…")
+    await callback.answer()
+
+    ctx = await _fetch_user_context(user_id)
+    await _run_editor_and_preview(
+        callback.message,
+        callback.message,
+        memory_id,
+        memory.cleaned_transcript or "",
+        [],
+        memory.source_question_id,
+        state,
+        ctx,
+        user_telegram_id=callback.from_user.id,
+    )
 
 
 # ── New chapter name input ──
