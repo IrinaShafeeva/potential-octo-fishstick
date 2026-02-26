@@ -18,6 +18,8 @@ async def init_db() -> None:
     migrations = [
         "ALTER TABLE users ADD COLUMN style_notes TEXT",
         "ALTER TABLE chapters ADD COLUMN thread_summary TEXT",
+        "ALTER TABLE memories ADD COLUMN clarification_thread TEXT",
+        "ALTER TABLE memories ADD COLUMN clarification_round INTEGER NOT NULL DEFAULT 0",
     ]
     for stmt in migrations:
         try:

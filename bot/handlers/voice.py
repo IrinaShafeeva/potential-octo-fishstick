@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 from aiogram import Router, F
@@ -19,20 +20,126 @@ from bot.services.classifier import classify_chapter
 from bot.services.style_profiler import update_style_profile
 from bot.services.character_extractor import extract_characters
 from bot.services.thread_summarizer import refresh_thread_summary
+from bot.services.clarifier import ask_clarification
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 MIN_VOICE_DURATION = 3
 STT_CONFIDENCE_THRESHOLD = 0.3
+MAX_CLARIFICATION_ROUNDS = 3
 
 
 class MemoryStates(StatesGroup):
     waiting_edit_text = State()
     waiting_text_memory = State()
-    waiting_clarification = State()
     waiting_new_chapter = State()
-    waiting_retell = State()
+
+
+# ── Core pipeline helpers ──
+
+async def _fetch_user_context(user_id: int) -> dict:
+    """Fetch author context needed by the editor (one DB session)."""
+    async with async_session() as session:
+        repo = Repository(session)
+        known_characters = await repo.get_characters(user_id)
+        known_places = await repo.get_places_with_counts(user_id)
+        style_notes = await repo.get_style_notes(user_id)
+        chapters = await repo.get_chapters(user_id)
+    return {
+        "known_characters": known_characters,
+        "known_places": known_places,
+        "style_notes": style_notes,
+        "chapters": chapters,
+    }
+
+
+async def _classify_chapter(cleaned: str, chapters: list) -> tuple[str | None, str | None]:
+    """Return (chapter_suggestion, thread_summary) for the cleaned text."""
+    if not chapters:
+        return None, None
+    chapters_dicts = [
+        {"title": ch.title, "period_hint": ch.period_hint or ""}
+        for ch in chapters
+    ]
+    classification = await classify_chapter(
+        cleaned, {"type": "unknown", "value": ""}, chapters_dicts
+    )
+    suggestion = classification.get("chapter_suggestion")
+    thread_summary = None
+    if suggestion:
+        for ch in chapters:
+            if ch.title == suggestion:
+                thread_summary = ch.thread_summary
+                break
+    return suggestion, thread_summary
+
+
+async def _run_editor_and_preview(
+    message: Message,
+    processing_msg,
+    memory_id: int,
+    cleaned: str,
+    qa_thread: list[dict],
+    source_question_id: str | None,
+    state: FSMContext | None,
+    ctx: dict,
+) -> None:
+    """Classify → edit (with QA context) → timeline → update memory → show preview."""
+    chapter_suggestion, thread_summary = await _classify_chapter(cleaned, ctx["chapters"])
+
+    edited = await edit_memoir(
+        cleaned,
+        ctx["known_characters"],
+        ctx["known_places"],
+        ctx["style_notes"],
+        thread_summary,
+        qa_thread or None,
+    )
+    time_hint = await extract_timeline(edited.get("edited_memoir_text", cleaned))
+
+    async with async_session() as session:
+        repo = Repository(session)
+        await repo.update_memory_after_edit(
+            memory_id=memory_id,
+            edited_text=edited.get("edited_memoir_text", cleaned),
+            title=edited.get("title", ""),
+            tags=edited.get("tags", []),
+            people=edited.get("people", []),
+            places=edited.get("places", []),
+            time_hint_type=time_hint.get("type"),
+            time_hint_value=time_hint.get("value"),
+            time_confidence=time_hint.get("confidence"),
+        )
+        await repo.clear_clarification_state(memory_id)
+
+        # Mark question answered — prefer FSM data, fall back to source_question_id lookup
+        question_log_id = None
+        if state:
+            data = await state.get_data()
+            question_log_id = data.get("answering_question_log_id")
+        if question_log_id:
+            await repo.mark_question_answered(question_log_id, memory_id)
+        elif source_question_id:
+            user = await repo.get_user(message.from_user.id)
+            if user:
+                await repo.mark_question_answered_by_source(user.id, source_question_id, memory_id)
+
+    if state:
+        await state.clear()
+
+    title = edited.get("title", "Воспоминание")
+    memoir_text = edited.get("edited_memoir_text", cleaned)
+    preview = memoir_text[:1500] + ("…" if len(memoir_text) > 1500 else "")
+
+    chapter_line = ""
+    if chapter_suggestion:
+        chapter_line = f"\n📁 Предлагаю главу: <b>{chapter_suggestion}</b>"
+
+    await processing_msg.edit_text(
+        f"<b>{title}</b>{chapter_line}\n\n{preview}",
+        reply_markup=memory_preview_kb(memory_id),
+    )
 
 
 async def _process_and_preview(
@@ -42,7 +149,7 @@ async def _process_and_preview(
     source_question_id: str | None = None,
     state: FSMContext | None = None,
 ) -> None:
-    """Shared pipeline: clean → classify → edit (with thread_summary) → preview."""
+    """Full pipeline for a new memory: clean → clarify → edit → preview."""
     processing_msg = await message.answer("⏳ Обрабатываю текст…")
     try:
         await _pipeline(
@@ -67,9 +174,8 @@ async def _pipeline(
     state: FSMContext | None,
 ) -> None:
     cleaned = await clean_transcript(raw_transcript)
-    await processing_msg.edit_text("⏳ Редактирую для книги…")
+    await processing_msg.edit_text("⏳ Читаю историю…")
 
-    # Fetch author context + chapters in one session
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_or_create_user(
@@ -77,89 +183,80 @@ async def _pipeline(
             username=message.from_user.username,
             first_name=message.from_user.first_name,
         )
-        known_characters = await repo.get_characters(user.id)
-        known_places = await repo.get_places_with_counts(user.id)
-        style_notes = await repo.get_style_notes(user.id)
-        chapters = await repo.get_chapters(user.id)
+        user_id = user.id
 
-    # Classify on cleaned text first — needed to fetch chapter thread_summary for editing
-    chapter_suggestion = None
-    thread_summary = None
-    if chapters:
-        chapters_dicts = [
-            {"title": ch.title, "period_hint": ch.period_hint or ""}
-            for ch in chapters
-        ]
-        classification = await classify_chapter(
-            cleaned,
-            {"type": "unknown", "value": ""},
-            chapters_dicts,
-        )
-        chapter_suggestion = classification.get("chapter_suggestion")
-        if chapter_suggestion:
-            for ch in chapters:
-                if ch.title == chapter_suggestion:
-                    thread_summary = ch.thread_summary
-                    break
+    ctx = await _fetch_user_context(user_id)
 
-    edited = await edit_memoir(cleaned, known_characters, known_places, style_notes, thread_summary)
-    time_hint = await extract_timeline(edited.get("edited_memoir_text", cleaned))
+    # Ask clarifier before editing — if a question is needed, park the story in DB
+    clarification = await ask_clarification(cleaned, [])
 
+    # Create the draft memory (with or without clarification pending)
     async with async_session() as session:
         repo = Repository(session)
-        user = await repo.get_user(message.from_user.id)
-
         memory = await repo.create_memory(
-            user_id=user.id,
+            user_id=user_id,
             audio_file_id=audio_file_id,
             raw_transcript=raw_transcript,
             cleaned_transcript=cleaned,
-            edited_memoir_text=edited.get("edited_memoir_text", cleaned),
-            title=edited.get("title", ""),
-            time_hint_type=time_hint.get("type"),
-            time_hint_value=time_hint.get("value"),
-            time_confidence=time_hint.get("confidence"),
-            tags=edited.get("tags", []),
-            people=edited.get("people", []),
-            places=edited.get("places", []),
             source_question_id=source_question_id,
         )
 
-    title = edited.get("title", "Воспоминание")
-    memoir_text = edited.get("edited_memoir_text", cleaned)
-    preview = memoir_text[:1500] + ("…" if len(memoir_text) > 1500 else "")
-
-    chapter_line = ""
-    if chapter_suggestion:
-        chapter_line = f"\n📁 Предлагаю главу: <b>{chapter_suggestion}</b>"
-
-    has_clarification = edited.get("needs_clarification") and edited.get("clarification_question")
-
-    if has_clarification:
-        # Show preview without save buttons, then ask the clarification question
-        await processing_msg.edit_text(
-            f"<b>{title}</b>{chapter_line}\n\n{preview}"
-        )
-        await message.answer(
-            f"💬 {edited['clarification_question']}\n\n"
-            "Ответьте — а потом я попрошу вас пересказать историю целиком со всеми деталями."
-        )
+    if not clarification.get("is_complete"):
+        question = clarification["question"]
+        thread = [{"role": "question", "text": question}]
+        async with async_session() as session:
+            repo = Repository(session)
+            await repo.set_clarification_state(memory.id, thread, 1)
+        await processing_msg.edit_text(f"💬 {question}")
         if state:
-            await state.set_state(MemoryStates.waiting_clarification)
-            await state.update_data(clarification_memory_id=memory.id)
-    else:
-        await processing_msg.edit_text(
-            f"<b>{title}</b>{chapter_line}\n\n{preview}",
-            reply_markup=memory_preview_kb(memory.id),
-        )
-        if state:
-            data = await state.get_data()
-            question_log_id = data.get("answering_question_log_id")
-            if question_log_id:
-                async with async_session() as session:
-                    repo = Repository(session)
-                    await repo.mark_question_answered(question_log_id, memory.id)
             await state.clear()
+        return
+
+    # No clarification needed — run editor immediately
+    await processing_msg.edit_text("⏳ Редактирую для книги…")
+    await _run_editor_and_preview(
+        message, processing_msg, memory.id, cleaned, [], source_question_id, state, ctx,
+    )
+
+
+async def _handle_clarification_answer(
+    message: Message,
+    state: FSMContext | None,
+    answer_text: str,
+    pending: object,  # Memory ORM object
+) -> None:
+    """Process user's answer to a clarification question."""
+    thread = json.loads(pending.clarification_thread or "[]")
+    thread.append({"role": "answer", "text": answer_text})
+    current_round = pending.clarification_round
+    cleaned = pending.cleaned_transcript or ""
+
+    processing_msg = await message.answer("⏳ Думаю…")
+
+    # Ask clarifier for next action (if still within round limit)
+    if current_round < MAX_CLARIFICATION_ROUNDS:
+        clarification = await ask_clarification(cleaned, thread)
+        if not clarification.get("is_complete"):
+            question = clarification["question"]
+            thread.append({"role": "question", "text": question})
+            async with async_session() as session:
+                repo = Repository(session)
+                await repo.set_clarification_state(pending.id, thread, current_round + 1)
+            await processing_msg.edit_text(f"💬 {question}")
+            return
+
+    # "История полная" or max rounds — compile and show preview
+    await processing_msg.edit_text("⏳ Редактирую для книги…")
+    async with async_session() as session:
+        repo = Repository(session)
+        user = await repo.get_user(message.from_user.id)
+        user_id = user.id
+
+    ctx = await _fetch_user_context(user_id)
+    await _run_editor_and_preview(
+        message, processing_msg, pending.id, cleaned, thread,
+        pending.source_question_id, state, ctx,
+    )
 
 
 # ── Voice handler ──
@@ -169,21 +266,6 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
     if message.voice.duration < MIN_VOICE_DURATION:
         await message.answer("Запись слишком короткая. Расскажите подробнее!")
         return
-
-    async with async_session() as session:
-        repo = Repository(session)
-        user = await repo.get_or_create_user(
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name,
-        )
-        if not user.is_premium and user.memories_count >= settings.free_memories_limit:
-            await message.answer(
-                f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
-                "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
-                reply_markup=main_menu_kb(),
-            )
-            return
 
     processing_msg = await message.answer("⏳ Распознаю речь…")
 
@@ -203,6 +285,29 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
 
     await processing_msg.delete()
 
+    # Check DB for pending clarification — voice = clarification answer
+    async with async_session() as session:
+        repo = Repository(session)
+        user = await repo.get_or_create_user(
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+        pending = await repo.get_pending_clarification_memory(user.id)
+        is_over_limit = not user.is_premium and user.memories_count >= settings.free_memories_limit
+
+    if pending:
+        await _handle_clarification_answer(message, state, raw_transcript, pending)
+        return
+
+    if is_over_limit:
+        await message.answer(
+            f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
+            "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
+            reply_markup=main_menu_kb(),
+        )
+        return
+
     data = await state.get_data()
     source_question_id = data.get("answering_question_id")
 
@@ -214,7 +319,7 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
     )
 
 
-# ── Text-as-memory handler (catch-all for free text, lowest priority) ──
+# ── Text-as-memory handler (explicit text mode) ──
 
 @router.message(F.text, MemoryStates.waiting_text_memory)
 async def handle_text_memory(message: Message, state: FSMContext) -> None:
@@ -302,7 +407,6 @@ async def prompt_record(message: Message, state: FSMContext) -> None:
 # ── Helpers ──
 
 async def _refresh_style_profile(user_id: int, memory_text: str) -> None:
-    """Update the author's style profile in the background after a memory is approved."""
     try:
         async with async_session() as session:
             repo = Repository(session)
@@ -315,7 +419,6 @@ async def _refresh_style_profile(user_id: int, memory_text: str) -> None:
 
 
 async def _refresh_characters(user_id: int, memory_text: str) -> None:
-    """Extract characters from a new approved memory and upsert into character library."""
     try:
         async with async_session() as session:
             repo = Repository(session)
@@ -344,7 +447,6 @@ async def _refresh_characters(user_id: int, memory_text: str) -> None:
 
 
 async def _refresh_thread_summary(chapter_id: int, chapter_title: str, memory_text: str) -> None:
-    """Update the chapter's running thread summary after a memory is approved."""
     try:
         async with async_session() as session:
             repo = Repository(session)
@@ -476,61 +578,6 @@ async def cb_split_memory(callback: CallbackQuery) -> None:
     await callback.answer("Разбиение на истории — скоро будет доступно!", show_alert=True)
 
 
-# ── Clarification answer ──
-
-@router.message(F.text, MemoryStates.waiting_clarification)
-async def handle_clarification(message: Message, state: FSMContext) -> None:
-    """User answered the clarification question — ask them to retell the full story."""
-    data = await state.get_data()
-    memory_id = data.get("clarification_memory_id")
-    answering_question_id = data.get("answering_question_id")
-    answering_question_log_id = data.get("answering_question_log_id")
-
-    if not memory_id:
-        await state.clear()
-        await message.answer("Не удалось найти воспоминание. Попробуйте записать заново.")
-        return
-
-    addition = message.text.strip()
-    if len(addition) < 5:
-        await message.answer("Слишком коротко. Расскажите чуть подробнее.")
-        return
-
-    # Transition to retell state — preserve question tracking so the retell pipeline
-    # can mark the question as answered when the new memory is saved.
-    await state.set_state(MemoryStates.waiting_retell)
-    await state.update_data(
-        retell_old_memory_id=memory_id,
-        answering_question_id=answering_question_id,
-        answering_question_log_id=answering_question_log_id,
-    )
-
-    await message.answer(
-        "Спасибо за уточнение!\n\n"
-        "Теперь расскажите всю историю заново — уже со всеми подробностями, которые вспомнили. "
-        "Говорите свободно, можно голосом или текстом. "
-        "Я оформлю это как полноценное воспоминание. 🎙"
-    )
-
-
-@router.message(F.text, MemoryStates.waiting_retell)
-async def handle_retell_text(message: Message, state: FSMContext) -> None:
-    """User retells the full story as text after clarification."""
-    text = message.text.strip()
-    if len(text) < 20:
-        await message.answer("Расскажите чуть подробнее — хотя бы пару предложений.")
-        return
-
-    data = await state.get_data()
-    source_question_id = data.get("answering_question_id")
-
-    await _process_and_preview(
-        message, text,
-        source_question_id=source_question_id,
-        state=state,
-    )
-
-
 # ── New chapter name input ──
 
 @router.message(F.text, MemoryStates.waiting_new_chapter)
@@ -598,11 +645,11 @@ async def cb_mem_back(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-# ── Catch-all: plain text treated as a memory (lowest priority) ──
+# ── Catch-all: plain text treated as a memory or clarification answer ──
 
 @router.message(F.text)
 async def catch_all_text(message: Message, state: FSMContext) -> None:
-    """Any unrecognized text ≥20 chars is processed as a memory entry."""
+    """Any unrecognized text: first check for pending clarification, then process as new memory."""
     text = message.text.strip()
     if len(text) < 20:
         await message.answer(
@@ -618,13 +665,21 @@ async def catch_all_text(message: Message, state: FSMContext) -> None:
             username=message.from_user.username,
             first_name=message.from_user.first_name,
         )
-        if not user.is_premium and user.memories_count >= settings.free_memories_limit:
-            await message.answer(
-                f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
-                "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
-                reply_markup=main_menu_kb(),
-            )
-            return
+        pending = await repo.get_pending_clarification_memory(user.id)
+        is_over_limit = not user.is_premium and user.memories_count >= settings.free_memories_limit
+
+    # Pending clarification takes priority — treat text as the answer
+    if pending:
+        await _handle_clarification_answer(message, state, text, pending)
+        return
+
+    if is_over_limit:
+        await message.answer(
+            f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
+            "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
+            reply_markup=main_menu_kb(),
+        )
+        return
 
     data = await state.get_data()
     source_question_id = data.get("answering_question_id")

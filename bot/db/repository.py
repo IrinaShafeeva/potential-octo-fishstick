@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -214,6 +215,82 @@ class Repository:
             .order_by(Memory.created_at)
         )
         return list(result.scalars().all())
+
+    async def get_pending_clarification_memory(self, user_id: int) -> Optional["Memory"]:
+        """Return the most recent draft memory awaiting clarification for this user."""
+        result = await self.session.execute(
+            select(Memory)
+            .where(Memory.user_id == user_id, Memory.clarification_round > 0)
+            .order_by(Memory.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def set_clarification_state(
+        self, memory_id: int, thread: list, round_: int
+    ) -> None:
+        await self.session.execute(
+            update(Memory)
+            .where(Memory.id == memory_id)
+            .values(clarification_thread=json.dumps(thread, ensure_ascii=False), clarification_round=round_)
+        )
+        await self.session.commit()
+
+    async def clear_clarification_state(self, memory_id: int) -> None:
+        await self.session.execute(
+            update(Memory)
+            .where(Memory.id == memory_id)
+            .values(clarification_thread=None, clarification_round=0)
+        )
+        await self.session.commit()
+
+    async def update_memory_after_edit(
+        self,
+        memory_id: int,
+        edited_text: str,
+        title: str,
+        tags: list,
+        people: list,
+        places: list,
+        time_hint_type: str | None = None,
+        time_hint_value: str | None = None,
+        time_confidence: float | None = None,
+    ) -> None:
+        await self.session.execute(
+            update(Memory)
+            .where(Memory.id == memory_id)
+            .values(
+                edited_memoir_text=edited_text,
+                title=title,
+                tags=tags,
+                people=people,
+                places=places,
+                time_hint_type=time_hint_type,
+                time_hint_value=time_hint_value,
+                time_confidence=time_confidence,
+            )
+        )
+        await self.session.commit()
+
+    async def mark_question_answered_by_source(
+        self, user_id: int, source_question_id: str, memory_id: int
+    ) -> None:
+        """Mark the most recent QuestionLog for this question as answered (fallback when FSM lost)."""
+        result = await self.session.execute(
+            select(QuestionLog)
+            .where(
+                QuestionLog.user_id == user_id,
+                QuestionLog.question_id == source_question_id,
+                QuestionLog.status == "asked",
+            )
+            .order_by(QuestionLog.asked_at.desc())
+            .limit(1)
+        )
+        log = result.scalar_one_or_none()
+        if log:
+            log.status = "answered"
+            log.answered_memory_id = memory_id
+            await self.session.commit()
 
     async def count_memories(self, user_id: int) -> int:
         result = await self.session.execute(
