@@ -329,10 +329,6 @@ async def handle_text_memory(message: Message, state: FSMContext) -> None:
         await message.answer("Расскажите чуть подробнее — хотя бы пару предложений.")
         return
 
-    data = await state.get_data()
-    source_question_id = data.get("answering_question_id")
-    await state.clear()
-
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_or_create_user(
@@ -340,13 +336,26 @@ async def handle_text_memory(message: Message, state: FSMContext) -> None:
             username=message.from_user.username,
             first_name=message.from_user.first_name,
         )
-        if not user.is_premium and user.memories_count >= settings.free_memories_limit:
-            await message.answer(
-                f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
-                "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
-                reply_markup=main_menu_kb(),
-            )
-            return
+        pending = await repo.get_pending_clarification_memory(user.id)
+        is_over_limit = not user.is_premium and user.memories_count >= settings.free_memories_limit
+
+    # If clarification is pending, treat this text as the answer (don't start new memory)
+    if pending:
+        await state.clear()
+        await _handle_clarification_answer(message, state, text, pending)
+        return
+
+    if is_over_limit:
+        await message.answer(
+            f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
+            "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
+            reply_markup=main_menu_kb(),
+        )
+        return
+
+    data = await state.get_data()
+    source_question_id = data.get("answering_question_id")
+    await state.clear()
 
     await _process_and_preview(
         message, text,
