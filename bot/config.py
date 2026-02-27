@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     editor_model: str = "gpt-4o"
     fast_model: str = "gpt-4o-mini"
-    whisper_model: str = "gpt-4o-mini-transcribe"
+    whisper_model: str = "gpt-4o-transcribe"
 
     database_url: str = "postgresql+asyncpg://memoir:memoir@localhost:5432/memoir_bot"
 
