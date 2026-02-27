@@ -49,7 +49,12 @@ async def ask_clarification(story: str, history: list[dict]) -> dict:
     if history:
         lines = []
         for item in history:
-            prefix = "В:" if item["role"] == "question" else "О:"
+            if item["role"] == "question":
+                prefix = "Вопрос:"
+            elif item["role"] == "answer":
+                prefix = "Ответ:"
+            else:  # skipped
+                prefix = "Пропущен (не задавай похожий):"
             lines.append(f"{prefix} {item['text']}")
         history_text = "\n\nИстория уточнений:\n" + "\n".join(lines)
 

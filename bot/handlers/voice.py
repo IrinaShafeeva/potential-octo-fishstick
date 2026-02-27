@@ -32,7 +32,8 @@ MAX_CLARIFICATION_ROUNDS = 3
 
 def _clarification_kb(memory_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="⏭ Пропустить вопрос", callback_data=f"skip_clarif:{memory_id}"),
+        InlineKeyboardButton(text="🔄 Другой вопрос", callback_data=f"other_clarif:{memory_id}"),
+        InlineKeyboardButton(text="⏭ Без уточнений", callback_data=f"skip_clarif:{memory_id}"),
     ]])
 
 
@@ -634,7 +635,7 @@ async def cb_split_memory(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("skip_clarif:"))
 async def cb_skip_clarification(callback: CallbackQuery, state: FSMContext) -> None:
-    """User skipped a clarification question — run editor on original transcript and show preview."""
+    """User chose 'without clarification' — run editor immediately on original transcript."""
     memory_id = int(callback.data.split(":")[1])
 
     async with async_session() as session:
@@ -662,6 +663,51 @@ async def cb_skip_clarification(callback: CallbackQuery, state: FSMContext) -> N
         ctx,
         user_telegram_id=callback.from_user.id,
     )
+
+
+@router.callback_query(F.data.startswith("other_clarif:"))
+async def cb_other_clarification(callback: CallbackQuery, state: FSMContext) -> None:
+    """User wants a different clarification question — mark current as skipped and ask again."""
+    memory_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+        if not memory:
+            await callback.answer("Воспоминание не найдено", show_alert=True)
+            return
+        user = await repo.get_user(callback.from_user.id)
+        user_id = user.id
+
+    thread = json.loads(memory.clarification_thread or "[]")
+    cleaned = memory.cleaned_transcript or ""
+
+    # Mark the last question as skipped so clarifier won't repeat it
+    if thread and thread[-1]["role"] == "question":
+        thread[-1]["role"] = "skipped"
+
+    await callback.answer()
+    processing_msg = await callback.message.edit_text("⏳ Думаю…")
+
+    clarification = await ask_clarification(cleaned, thread)
+
+    if not clarification.get("is_complete"):
+        question = clarification["question"]
+        thread.append({"role": "question", "text": question})
+        async with async_session() as session:
+            repo = Repository(session)
+            await repo.set_clarification_state(memory_id, thread, memory.clarification_round)
+        await processing_msg.edit_text(f"💬 {question}", reply_markup=_clarification_kb(memory_id))
+    else:
+        # No more questions — go to editor
+        await processing_msg.edit_text("⏳ Редактирую для книги…")
+        ctx = await _fetch_user_context(user_id)
+        qa_answers = [e for e in thread if e["role"] == "answer"]
+        await _run_editor_and_preview(
+            callback.message, processing_msg, memory_id, cleaned,
+            qa_answers, memory.source_question_id, state, ctx,
+            user_telegram_id=callback.from_user.id,
+        )
 
 
 # ── New chapter name input ──
