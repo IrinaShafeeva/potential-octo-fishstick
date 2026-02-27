@@ -118,6 +118,7 @@ async def _run_editor_and_preview(
             time_hint_type=time_hint.get("type"),
             time_hint_value=time_hint.get("value"),
             time_confidence=time_hint.get("confidence"),
+            chapter_suggestion=chapter_suggestion,
         )
         await repo.clear_clarification_state(memory_id)
 
@@ -496,25 +497,46 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
 
         user = await repo.get_user(callback.from_user.id)
         chapters = await repo.get_chapters(user.id)
+        suggestion = memory.chapter_suggestion
 
-        if not chapters:
-            chapter = await repo.create_chapter(user.id, "Разное")
-            chapters = [chapter]
+        # Find or create the suggested chapter
+        target_chapter = None
+        if suggestion:
+            target_chapter = next((ch for ch in chapters if ch.title == suggestion), None)
+            if not target_chapter:
+                target_chapter = await repo.create_chapter(user.id, suggestion)
 
-        if len(chapters) == 1:
-            await repo.approve_memory(memory_id, chapters[0].id)
+        if target_chapter:
+            # Use the classifier's suggestion directly
+            await repo.approve_memory(memory_id, target_chapter.id)
             new_count = await repo.increment_memories_count(user.id)
             await repo.update_topic_coverage(user.id, memory.tags or [])
             await callback.message.edit_text(
                 f"{callback.message.text}\n\n"
-                f"✅ Сохранено в главу «{chapters[0].title}»\n"
+                f"✅ Сохранено в главу «{target_chapter.title}»\n"
                 f"📊 Всего воспоминаний: {new_count}",
             )
             text = memory.edited_memoir_text or ""
             asyncio.create_task(_refresh_style_profile(user.id, text))
             asyncio.create_task(_refresh_characters(user.id, text))
-            asyncio.create_task(_refresh_thread_summary(chapters[0].id, chapters[0].title, text))
+            asyncio.create_task(_refresh_thread_summary(target_chapter.id, target_chapter.title, text))
+        elif not chapters:
+            # No suggestion and no chapters — create default
+            chapter = await repo.create_chapter(user.id, "Разное")
+            await repo.approve_memory(memory_id, chapter.id)
+            new_count = await repo.increment_memories_count(user.id)
+            await repo.update_topic_coverage(user.id, memory.tags or [])
+            await callback.message.edit_text(
+                f"{callback.message.text}\n\n"
+                f"✅ Сохранено в главу «{chapter.title}»\n"
+                f"📊 Всего воспоминаний: {new_count}",
+            )
+            text = memory.edited_memoir_text or ""
+            asyncio.create_task(_refresh_style_profile(user.id, text))
+            asyncio.create_task(_refresh_characters(user.id, text))
+            asyncio.create_task(_refresh_thread_summary(chapter.id, chapter.title, text))
         else:
+            # No suggestion — let user pick from existing chapters
             chapters_dicts = [{"id": ch.id, "title": ch.title} for ch in chapters]
             await callback.message.edit_reply_markup(
                 reply_markup=chapter_select_kb(chapters_dicts, memory_id),

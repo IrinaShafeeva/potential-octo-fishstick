@@ -79,6 +79,9 @@ class Memory(Base):
     approved = Column(Boolean, default=False)
     source_question_id = Column(String(100), nullable=True)
 
+    # Chapter suggestion from classifier (used at save time)
+    chapter_suggestion = Column(String(500), nullable=True)
+
     # Clarification loop state (stored in DB so it survives bot restarts)
     clarification_thread = Column(Text, nullable=True)   # JSON list of {role, text}
     clarification_round = Column(Integer, default=0)     # 0 = no pending, 1-3 = waiting

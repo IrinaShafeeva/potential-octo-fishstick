@@ -274,6 +274,7 @@ class Repository:
         time_hint_type: str | None = None,
         time_hint_value: str | None = None,
         time_confidence: float | None = None,
+        chapter_suggestion: str | None = None,
     ) -> None:
         await self.session.execute(
             update(Memory)
@@ -287,6 +288,7 @@ class Repository:
                 time_hint_type=time_hint_type,
                 time_hint_value=time_hint_value,
                 time_confidence=time_confidence,
+                chapter_suggestion=chapter_suggestion,
             )
         )
         await self.session.commit()
