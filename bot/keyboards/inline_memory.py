@@ -1,18 +1,40 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
-def memory_preview_kb(memory_id: int) -> InlineKeyboardMarkup:
+def memory_fantasy_kb(memory_id: int) -> InlineKeyboardMarkup:
+    """Keyboard shown when fantasy (creative) version is displayed."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="✅ Сохранить в книгу", callback_data=f"mem_save:{memory_id}"),
-                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
+                InlineKeyboardButton(text="✅ Сохранить в книгу", callback_data=f"mem_save_fantasy:{memory_id}"),
+                InlineKeyboardButton(text="📝 Точная версия", callback_data=f"show_strict:{memory_id}"),
             ],
             [
                 InlineKeyboardButton(text="🧩 Разбить на истории", callback_data=f"mem_split:{memory_id}"),
                 InlineKeyboardButton(text="🧷 В другую главу", callback_data=f"mem_move:{memory_id}"),
             ],
             [
+                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
+                InlineKeyboardButton(text="🎙 Перезаписать", callback_data=f"mem_redo:{memory_id}"),
+            ],
+        ]
+    )
+
+
+def memory_preview_kb(memory_id: int) -> InlineKeyboardMarkup:
+    """Keyboard for strict (accurate) version — also shown when no fantasy is available."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Сохранить в книгу", callback_data=f"mem_save:{memory_id}"),
+                InlineKeyboardButton(text="✨ Фантазируй", callback_data=f"show_fantasy:{memory_id}"),
+            ],
+            [
+                InlineKeyboardButton(text="🧩 Разбить на истории", callback_data=f"mem_split:{memory_id}"),
+                InlineKeyboardButton(text="🧷 В другую главу", callback_data=f"mem_move:{memory_id}"),
+            ],
+            [
+                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
                 InlineKeyboardButton(text="🎙 Перезаписать", callback_data=f"mem_redo:{memory_id}"),
             ],
         ]

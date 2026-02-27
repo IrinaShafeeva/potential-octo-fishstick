@@ -21,6 +21,8 @@ async def init_db() -> None:
         "ALTER TABLE memories ADD COLUMN clarification_thread TEXT",
         "ALTER TABLE memories ADD COLUMN clarification_round INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE memories ADD COLUMN chapter_suggestion VARCHAR(500)",
+        "ALTER TABLE memories ADD COLUMN fantasy_memoir_text TEXT",
+        "ALTER TABLE users ADD COLUMN gender VARCHAR(10)",
     ]
     for stmt in migrations:
         try:

@@ -5,7 +5,7 @@ from openai import AsyncOpenAI
 
 from bot.config import settings
 from bot.prompts.cleaner import CLEANER_SYSTEM, CLEANER_USER
-from bot.prompts.editor import EDITOR_SYSTEM, EDITOR_USER
+from bot.prompts.editor import EDITOR_SYSTEM, EDITOR_USER, FANTASY_EDITOR_SYSTEM, FANTASY_EDITOR_USER
 from bot.services.character_extractor import format_characters_for_editor
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ async def edit_memoir(
     known_places: list | None = None,
     style_notes: str | None = None,
     clarification_qa: list[dict] | None = None,
+    author_gender: str | None = None,
 ) -> dict:
     """Literary editing: transform cleaned transcript into memoir text.
 
@@ -64,11 +65,18 @@ async def edit_memoir(
             lines.append(f"{prefix} {item['text']}")
         qa_str = "\nУточняющие вопросы и ответы автора:\n" + "\n".join(lines) + "\n"
 
+    if author_gender == "female":
+        gender_hint = "\nАВТОР — ЖЕНЩИНА. Во всех глаголах и кратких прилагательных от первого лица используй женский род (была, переехала, жила и т.д.)."
+    elif author_gender == "male":
+        gender_hint = "\nАВТОР — МУЖЧИНА. Во всех глаголах и кратких прилагательных от первого лица используй мужской род (был, переехал, жил и т.д.)."
+    else:
+        gender_hint = "\nОПРЕДЕЛИ пол автора по форме глаголов в его тексте (переехала/переехал, была/был и т.д.) и используй соответствующий грамматический род."
+
     try:
         response = await client.chat.completions.create(
             model=settings.editor_model,
             messages=[
-                {"role": "system", "content": EDITOR_SYSTEM},
+                {"role": "system", "content": EDITOR_SYSTEM + gender_hint},
                 {
                     "role": "user",
                     "content": EDITOR_USER.format(
@@ -89,6 +97,60 @@ async def edit_memoir(
     except Exception as e:
         logger.error("Editor error: %s", e)
         return {"edited_memoir_text": cleaned_transcript, "title": "Без названия", "tags": [], "people": [], "places": []}
+
+
+async def fantasy_edit_memoir(
+    cleaned_transcript: str,
+    clarification_qa: list[dict] | None = None,
+    thread_summary: str | None = None,
+    author_gender: str | None = None,
+) -> str:
+    """Creative editing: enrich the memoir with sensory details and atmosphere.
+
+    Returns the fantasy memoir text (plain string), or empty string on error.
+    clarification_qa: list of {role: question|answer, text} from clarifier loop.
+    thread_summary: existing chapter context (used for tonal consistency).
+    """
+    qa_str = ""
+    if clarification_qa:
+        lines = []
+        for item in clarification_qa:
+            prefix = "В:" if item["role"] == "question" else "О:"
+            lines.append(f"{prefix} {item['text']}")
+        qa_str = "\nУточняющие ответы автора:\n" + "\n".join(lines) + "\n"
+
+    thread_context = ""
+    if thread_summary:
+        thread_context = f"\nКонтекст главы (для тона и атмосферы):\n{thread_summary}\n"
+
+    if author_gender == "female":
+        fantasy_gender_hint = "\nАВТОР — ЖЕНЩИНА. Во всех глаголах и кратких прилагательных от первого лица используй женский род."
+    elif author_gender == "male":
+        fantasy_gender_hint = "\nАВТОР — МУЖЧИНА. Во всех глаголах и кратких прилагательных от первого лица используй мужской род."
+    else:
+        fantasy_gender_hint = "\nОПРЕДЕЛИ пол автора по форме глаголов в тексте и используй соответствующий грамматический род."
+
+    try:
+        response = await client.chat.completions.create(
+            model=settings.fast_model,
+            messages=[
+                {"role": "system", "content": FANTASY_EDITOR_SYSTEM + fantasy_gender_hint},
+                {
+                    "role": "user",
+                    "content": FANTASY_EDITOR_USER.format(
+                        cleaned_transcript=cleaned_transcript,
+                        clarification_qa=qa_str,
+                        thread_context=thread_context,
+                    ),
+                },
+            ],
+            temperature=0.7,
+            max_tokens=4000,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error("Fantasy editor error: %s", e)
+        return ""
 
 
 async def merge_clarification(memoir_text: str, clarification_answer: str) -> str:

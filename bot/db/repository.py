@@ -71,6 +71,18 @@ class Repository:
         )
         await self.session.commit()
 
+    async def get_gender(self, user_id: int) -> str | None:
+        result = await self.session.execute(
+            select(User.gender).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def set_user_gender(self, user_id: int, gender: str) -> None:
+        await self.session.execute(
+            update(User).where(User.id == user_id).values(gender=gender)
+        )
+        await self.session.commit()
+
     async def increment_memories_count(self, user_id: int) -> int:
         await self.session.execute(
             update(User)
@@ -275,12 +287,14 @@ class Repository:
         time_hint_value: str | None = None,
         time_confidence: float | None = None,
         chapter_suggestion: str | None = None,
+        fantasy_text: str | None = None,
     ) -> None:
         await self.session.execute(
             update(Memory)
             .where(Memory.id == memory_id)
             .values(
                 edited_memoir_text=edited_text,
+                fantasy_memoir_text=fantasy_text,
                 title=title,
                 tags=tags,
                 people=people,
@@ -292,6 +306,20 @@ class Repository:
             )
         )
         await self.session.commit()
+
+    async def set_primary_text_to_fantasy(self, memory_id: int) -> None:
+        """Copy fantasy_memoir_text → edited_memoir_text so saves use the fantasy version."""
+        result = await self.session.execute(
+            select(Memory.fantasy_memoir_text).where(Memory.id == memory_id)
+        )
+        fantasy = result.scalar_one_or_none()
+        if fantasy:
+            await self.session.execute(
+                update(Memory)
+                .where(Memory.id == memory_id)
+                .values(edited_memoir_text=fantasy)
+            )
+            await self.session.commit()
 
     async def mark_question_answered_by_source(
         self, user_id: int, source_question_id: str, memory_id: int

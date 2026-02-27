@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -10,11 +11,11 @@ from aiogram.fsm.state import State, StatesGroup
 from bot.config import settings
 from bot.db.engine import async_session
 from bot.db.repository import Repository
-from bot.keyboards.inline_memory import memory_preview_kb, chapter_select_kb
+from bot.keyboards.inline_memory import memory_preview_kb, memory_fantasy_kb, chapter_select_kb
 from bot.keyboards.main_menu import main_menu_kb
 from bot.loader import bot
 from bot.services.stt import transcribe_voice
-from bot.services.ai_editor import clean_transcript, edit_memoir
+from bot.services.ai_editor import clean_transcript, edit_memoir, fantasy_edit_memoir
 from bot.services.timeline import extract_timeline
 from bot.services.classifier import classify_chapter
 from bot.services.style_profiler import update_style_profile
@@ -43,6 +44,31 @@ class MemoryStates(StatesGroup):
     waiting_new_chapter = State()
 
 
+def _detect_gender(text: str) -> str | None:
+    """Detect author gender from Russian text by analysing first-person verb forms.
+
+    Returns 'female', 'male', or None if unclear.
+    """
+    t = text.lower()
+    sentences = re.split(r'[.!?\n]', t)
+    fem = 0
+    masc = 0
+    for sent in sentences:
+        if 'я' not in sent:
+            continue
+        # Feminine past tense: -ла, -лась
+        if re.search(r'\w+(?:лась|ла)\b', sent):
+            fem += 1
+        # Masculine past tense: -л or -лся but NOT -ла/-лась
+        elif re.search(r'\w+л(?!а|и|о|сь)\b', sent):
+            masc += 1
+    if fem > masc:
+        return 'female'
+    if masc > fem:
+        return 'male'
+    return None
+
+
 # ── Core pipeline helpers ──
 
 async def _fetch_user_context(user_id: int) -> dict:
@@ -53,11 +79,13 @@ async def _fetch_user_context(user_id: int) -> dict:
         known_places = await repo.get_places_with_counts(user_id)
         style_notes = await repo.get_style_notes(user_id)
         chapters = await repo.get_chapters(user_id)
+        gender = await repo.get_gender(user_id)
     return {
         "known_characters": known_characters,
         "known_places": known_places,
         "style_notes": style_notes,
         "chapters": chapters,
+        "gender": gender,
     }
 
 
@@ -97,20 +125,29 @@ async def _run_editor_and_preview(
     """Classify → edit (with QA context) → timeline → update memory → show preview."""
     chapter_suggestion, thread_summary = await _classify_chapter(cleaned, ctx["chapters"])
 
-    edited = await edit_memoir(
-        cleaned,
-        ctx["known_characters"],
-        ctx["known_places"],
-        ctx["style_notes"],
-        qa_thread or None,
+    # Run strict and fantasy editors in parallel
+    author_gender = ctx.get("gender")
+    edited, fantasy_text = await asyncio.gather(
+        edit_memoir(
+            cleaned,
+            ctx["known_characters"],
+            ctx["known_places"],
+            ctx["style_notes"],
+            qa_thread or None,
+            author_gender,
+        ),
+        fantasy_edit_memoir(cleaned, qa_thread or None, thread_summary, author_gender),
     )
-    time_hint = await extract_timeline(edited.get("edited_memoir_text", cleaned))
+
+    strict_text = edited.get("edited_memoir_text", cleaned)
+    time_hint = await extract_timeline(strict_text)
 
     async with async_session() as session:
         repo = Repository(session)
         await repo.update_memory_after_edit(
             memory_id=memory_id,
-            edited_text=edited.get("edited_memoir_text", cleaned),
+            edited_text=strict_text,
+            fantasy_text=fantasy_text or None,
             title=edited.get("title", ""),
             tags=edited.get("tags", []),
             people=edited.get("people", []),
@@ -140,17 +177,23 @@ async def _run_editor_and_preview(
         await state.clear()
 
     title = edited.get("title", "Воспоминание")
-    memoir_text = edited.get("edited_memoir_text", cleaned)
-    preview = memoir_text[:1500] + ("…" if len(memoir_text) > 1500 else "")
+    chapter_line = f"\n📁 Предлагаю главу: <b>{chapter_suggestion}</b>" if chapter_suggestion else ""
 
-    chapter_line = ""
-    if chapter_suggestion:
-        chapter_line = f"\n📁 Предлагаю главу: <b>{chapter_suggestion}</b>"
-
-    await processing_msg.edit_text(
-        f"<b>{title}</b>{chapter_line}\n\n{preview}",
-        reply_markup=memory_preview_kb(memory_id),
-    )
+    if fantasy_text:
+        # Show fantasy version by default
+        preview = fantasy_text[:1200] + ("…" if len(fantasy_text) > 1200 else "")
+        hint = "\n\n✨ <i>Это творческая версия — редактор добавил детали от себя.</i>\n<i>Если вдохновила — можете перезаписать воспоминание 🎙</i>"
+        await processing_msg.edit_text(
+            f"<b>{title}</b>{chapter_line}\n\n{preview}{hint}",
+            reply_markup=memory_fantasy_kb(memory_id),
+        )
+    else:
+        # Fantasy failed — fall back to strict version
+        preview = strict_text[:1500] + ("…" if len(strict_text) > 1500 else "")
+        await processing_msg.edit_text(
+            f"<b>{title}</b>{chapter_line}\n\n{preview}",
+            reply_markup=memory_preview_kb(memory_id),
+        )
 
 
 async def _process_and_preview(
@@ -197,6 +240,15 @@ async def _pipeline(
         user_id = user.id
 
     ctx = await _fetch_user_context(user_id)
+
+    # Auto-detect gender from cleaned text and save if not yet known
+    if not ctx.get("gender"):
+        detected = _detect_gender(cleaned)
+        if detected:
+            async with async_session() as session:
+                repo = Repository(session)
+                await repo.set_user_gender(user_id, detected)
+            ctx["gender"] = detected
 
     # Ask clarifier before editing — if a question is needed, park the story in DB
     clarification = await ask_clarification(cleaned, [])
@@ -484,12 +536,12 @@ async def _refresh_thread_summary(chapter_id: int, chapter_title: str, memory_te
 
 # ── Inline callbacks for memory actions ──
 
-@router.callback_query(F.data.startswith("mem_save:"))
-async def cb_save_memory(callback: CallbackQuery) -> None:
-    memory_id = int(callback.data.split(":")[1])
-
+async def _do_save_memory(callback: CallbackQuery, memory_id: int, use_fantasy: bool = False) -> None:
+    """Shared save logic for both strict and fantasy versions."""
     async with async_session() as session:
         repo = Repository(session)
+        if use_fantasy:
+            await repo.set_primary_text_to_fantasy(memory_id)
         memory = await repo.get_memory(memory_id)
         if not memory:
             await callback.answer("Воспоминание не найдено")
@@ -507,7 +559,6 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
                 target_chapter = await repo.create_chapter(user.id, suggestion)
 
         if target_chapter:
-            # Use the classifier's suggestion directly
             await repo.approve_memory(memory_id, target_chapter.id)
             new_count = await repo.increment_memories_count(user.id)
             await repo.update_topic_coverage(user.id, memory.tags or [])
@@ -523,7 +574,6 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
             asyncio.create_task(_refresh_characters(user.id, text))
             asyncio.create_task(_refresh_thread_summary(target_chapter.id, target_chapter.title, text))
         elif not chapters:
-            # No suggestion and no chapters — create default
             chapter = await repo.create_chapter(user.id, "Разное")
             await repo.approve_memory(memory_id, chapter.id)
             new_count = await repo.increment_memories_count(user.id)
@@ -540,13 +590,24 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
             asyncio.create_task(_refresh_characters(user.id, text))
             asyncio.create_task(_refresh_thread_summary(chapter.id, chapter.title, text))
         else:
-            # No suggestion — let user pick from existing chapters
             chapters_dicts = [{"id": ch.id, "title": ch.title} for ch in chapters]
             await callback.message.edit_reply_markup(
                 reply_markup=chapter_select_kb(chapters_dicts, memory_id),
             )
 
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("mem_save:"))
+async def cb_save_memory(callback: CallbackQuery) -> None:
+    memory_id = int(callback.data.split(":")[1])
+    await _do_save_memory(callback, memory_id, use_fantasy=False)
+
+
+@router.callback_query(F.data.startswith("mem_save_fantasy:"))
+async def cb_save_fantasy_memory(callback: CallbackQuery) -> None:
+    memory_id = int(callback.data.split(":")[1])
+    await _do_save_memory(callback, memory_id, use_fantasy=True)
 
 
 @router.callback_query(F.data.startswith("mem_to_ch:"))
@@ -710,6 +771,59 @@ async def cb_other_clarification(callback: CallbackQuery, state: FSMContext) -> 
         )
 
 
+# ── Fantasy / strict version toggle ──
+
+@router.callback_query(F.data.startswith("show_strict:"))
+async def cb_show_strict_version(callback: CallbackQuery) -> None:
+    """Switch the preview to the strict (accurate) version."""
+    memory_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+
+    if not memory or not memory.edited_memoir_text:
+        await callback.answer("Точная версия недоступна", show_alert=True)
+        return
+
+    title = memory.title or "Воспоминание"
+    chapter_line = f"\n📁 Предлагаю главу: <b>{memory.chapter_suggestion}</b>" if memory.chapter_suggestion else ""
+    strict_text = memory.edited_memoir_text
+    preview = strict_text[:1500] + ("…" if len(strict_text) > 1500 else "")
+
+    await callback.message.edit_text(
+        f"<b>{title}</b>{chapter_line}\n\n{preview}",
+        reply_markup=memory_preview_kb(memory_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("show_fantasy:"))
+async def cb_show_fantasy_version(callback: CallbackQuery) -> None:
+    """Switch the preview to the fantasy (creative) version."""
+    memory_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+
+    if not memory or not memory.fantasy_memoir_text:
+        await callback.answer("Творческая версия недоступна", show_alert=True)
+        return
+
+    title = memory.title or "Воспоминание"
+    chapter_line = f"\n📁 Предлагаю главу: <b>{memory.chapter_suggestion}</b>" if memory.chapter_suggestion else ""
+    fantasy_text = memory.fantasy_memoir_text
+    preview = fantasy_text[:1200] + ("…" if len(fantasy_text) > 1200 else "")
+    hint = "\n\n✨ <i>Это творческая версия — редактор добавил детали от себя.</i>\n<i>Если вдохновила — можете перезаписать воспоминание 🎙</i>"
+
+    await callback.message.edit_text(
+        f"<b>{title}</b>{chapter_line}\n\n{preview}{hint}",
+        reply_markup=memory_fantasy_kb(memory_id),
+    )
+    await callback.answer()
+
+
 # ── New chapter name input ──
 
 @router.message(F.text, MemoryStates.waiting_new_chapter)
@@ -786,6 +900,8 @@ async def cb_mem_back(callback: CallbackQuery) -> None:
     from bot.keyboards.inline_memory import saved_memory_kb
     if memory.approved:
         await callback.message.edit_reply_markup(reply_markup=saved_memory_kb(memory_id))
+    elif memory.fantasy_memoir_text:
+        await callback.message.edit_reply_markup(reply_markup=memory_fantasy_kb(memory_id))
     else:
         await callback.message.edit_reply_markup(reply_markup=memory_preview_kb(memory_id))
     await callback.answer()

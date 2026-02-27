@@ -31,6 +31,7 @@ class User(Base):
     memories_count = Column(Integer, default=0)
     questions_asked_count = Column(Integer, default=0)
     style_notes = Column(Text, nullable=True)  # cumulative author style profile
+    gender = Column(String(10), nullable=True)  # 'female', 'male', or None if unknown
 
     chapters = relationship("Chapter", back_populates="user", cascade="all, delete-orphan")
     memories = relationship("Memory", back_populates="user", cascade="all, delete-orphan")
@@ -65,6 +66,7 @@ class Memory(Base):
     raw_transcript = Column(Text, nullable=True)
     cleaned_transcript = Column(Text, nullable=True)
     edited_memoir_text = Column(Text, nullable=True)
+    fantasy_memoir_text = Column(Text, nullable=True)
     title = Column(String(500), nullable=True)
 
     time_hint_type = Column(String(50), nullable=True)
