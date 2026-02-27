@@ -21,14 +21,14 @@ def memory_fantasy_kb(memory_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def memory_preview_kb(memory_id: int) -> InlineKeyboardMarkup:
-    """Keyboard for strict (accurate) version — also shown when no fantasy is available."""
+def memory_preview_kb(memory_id: int, has_fantasy: bool = True) -> InlineKeyboardMarkup:
+    """Keyboard for strict (accurate) version."""
+    first_row = [InlineKeyboardButton(text="✅ Сохранить в книгу", callback_data=f"mem_save:{memory_id}")]
+    if has_fantasy:
+        first_row.append(InlineKeyboardButton(text="✨ Творческая версия", callback_data=f"show_fantasy:{memory_id}"))
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="✅ Сохранить в книгу", callback_data=f"mem_save:{memory_id}"),
-                InlineKeyboardButton(text="✨ Фантазируй", callback_data=f"show_fantasy:{memory_id}"),
-            ],
+            first_row,
             [
                 InlineKeyboardButton(text="🧩 Разбить на истории", callback_data=f"mem_split:{memory_id}"),
                 InlineKeyboardButton(text="🧷 В другую главу", callback_data=f"mem_move:{memory_id}"),

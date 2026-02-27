@@ -179,21 +179,12 @@ async def _run_editor_and_preview(
     title = edited.get("title", "Воспоминание")
     chapter_line = f"\n📁 Предлагаю главу: <b>{chapter_suggestion}</b>" if chapter_suggestion else ""
 
-    if fantasy_text:
-        # Show fantasy version by default
-        preview = fantasy_text[:1200] + ("…" if len(fantasy_text) > 1200 else "")
-        hint = "\n\n✨ <i>Это творческая версия — редактор добавил детали от себя.</i>\n<i>Если вдохновила — можете перезаписать воспоминание 🎙</i>"
-        await processing_msg.edit_text(
-            f"<b>{title}</b>{chapter_line}\n\n{preview}{hint}",
-            reply_markup=memory_fantasy_kb(memory_id),
-        )
-    else:
-        # Fantasy failed — fall back to strict version
-        preview = strict_text[:1500] + ("…" if len(strict_text) > 1500 else "")
-        await processing_msg.edit_text(
-            f"<b>{title}</b>{chapter_line}\n\n{preview}",
-            reply_markup=memory_preview_kb(memory_id),
-        )
+    # Always show strict version first; fantasy available via button if it exists
+    preview = strict_text[:1500] + ("…" if len(strict_text) > 1500 else "")
+    await processing_msg.edit_text(
+        f"<b>{title}</b>{chapter_line}\n\n{preview}",
+        reply_markup=memory_preview_kb(memory_id, has_fantasy=bool(fantasy_text)),
+    )
 
 
 async def _process_and_preview(
@@ -793,7 +784,7 @@ async def cb_show_strict_version(callback: CallbackQuery) -> None:
 
     await callback.message.edit_text(
         f"<b>{title}</b>{chapter_line}\n\n{preview}",
-        reply_markup=memory_preview_kb(memory_id),
+        reply_markup=memory_preview_kb(memory_id, has_fantasy=True),
     )
     await callback.answer()
 
@@ -900,10 +891,10 @@ async def cb_mem_back(callback: CallbackQuery) -> None:
     from bot.keyboards.inline_memory import saved_memory_kb
     if memory.approved:
         await callback.message.edit_reply_markup(reply_markup=saved_memory_kb(memory_id))
-    elif memory.fantasy_memoir_text:
-        await callback.message.edit_reply_markup(reply_markup=memory_fantasy_kb(memory_id))
     else:
-        await callback.message.edit_reply_markup(reply_markup=memory_preview_kb(memory_id))
+        await callback.message.edit_reply_markup(
+            reply_markup=memory_preview_kb(memory_id, has_fantasy=bool(memory.fantasy_memoir_text))
+        )
     await callback.answer()
 
 
