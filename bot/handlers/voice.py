@@ -101,7 +101,6 @@ async def _run_editor_and_preview(
         ctx["known_characters"],
         ctx["known_places"],
         ctx["style_notes"],
-        thread_summary,
         qa_thread or None,
     )
     time_hint = await extract_timeline(edited.get("edited_memoir_text", cleaned))

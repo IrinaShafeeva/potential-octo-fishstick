@@ -47,7 +47,6 @@ async def edit_memoir(
     known_characters: list | None = None,
     known_places: list | None = None,
     style_notes: str | None = None,
-    thread_summary: str | None = None,
     clarification_qa: list[dict] | None = None,
 ) -> dict:
     """Literary editing: transform cleaned transcript into memoir text.
@@ -55,13 +54,11 @@ async def edit_memoir(
     Returns dict with keys: edited_memoir_text, title, tags, people, places.
     known_characters: list of Character ORM objects or dicts with name/relationship/description.
     known_places: list[str] or list[tuple[str, int]].
-    thread_summary: running digest of what's already in the likely chapter.
     clarification_qa: list of {"role": "question"|"answer", "text": "..."} from clarifier loop.
     """
     characters_str = format_characters_for_editor(known_characters) if known_characters else "нет данных"
     places_str = _format_context_list(known_places) if known_places else "нет данных"
     style_str = style_notes.strip() if style_notes else "профиль ещё формируется"
-    thread_str = thread_summary.strip() if thread_summary else "первое воспоминание в главе"
 
     qa_str = ""
     if clarification_qa:
@@ -84,7 +81,6 @@ async def edit_memoir(
                         known_characters=characters_str,
                         known_places=places_str,
                         style_notes=style_str,
-                        thread_summary=thread_str,
                     ),
                 },
             ],
