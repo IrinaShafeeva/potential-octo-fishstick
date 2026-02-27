@@ -511,10 +511,12 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
             await repo.approve_memory(memory_id, target_chapter.id)
             new_count = await repo.increment_memories_count(user.id)
             await repo.update_topic_coverage(user.id, memory.tags or [])
+            from bot.keyboards.inline_memory import saved_memory_kb
             await callback.message.edit_text(
                 f"{callback.message.text}\n\n"
                 f"✅ Сохранено в главу «{target_chapter.title}»\n"
                 f"📊 Всего воспоминаний: {new_count}",
+                reply_markup=saved_memory_kb(memory_id),
             )
             text = memory.edited_memoir_text or ""
             asyncio.create_task(_refresh_style_profile(user.id, text))
@@ -526,10 +528,12 @@ async def cb_save_memory(callback: CallbackQuery) -> None:
             await repo.approve_memory(memory_id, chapter.id)
             new_count = await repo.increment_memories_count(user.id)
             await repo.update_topic_coverage(user.id, memory.tags or [])
+            from bot.keyboards.inline_memory import saved_memory_kb
             await callback.message.edit_text(
                 f"{callback.message.text}\n\n"
                 f"✅ Сохранено в главу «{chapter.title}»\n"
                 f"📊 Всего воспоминаний: {new_count}",
+                reply_markup=saved_memory_kb(memory_id),
             )
             text = memory.edited_memoir_text or ""
             asyncio.create_task(_refresh_style_profile(user.id, text))
@@ -565,10 +569,12 @@ async def cb_move_to_chapter(callback: CallbackQuery) -> None:
     asyncio.create_task(_refresh_characters(user.id, text))
     asyncio.create_task(_refresh_thread_summary(chapter_id, chapter.title, text))
 
+    from bot.keyboards.inline_memory import saved_memory_kb
     await callback.message.edit_text(
         f"{callback.message.text}\n\n"
         f"✅ Сохранено в главу «{chapter.title}»\n"
         f"📊 Всего воспоминаний: {new_count}",
+        reply_markup=saved_memory_kb(memory_id),
     )
     await callback.answer()
 
@@ -577,7 +583,11 @@ async def cb_move_to_chapter(callback: CallbackQuery) -> None:
 async def cb_new_chapter_for_memory(callback: CallbackQuery, state: FSMContext) -> None:
     memory_id = int(callback.data.split(":")[1])
     await state.set_state(MemoryStates.waiting_new_chapter)
-    await state.update_data(new_chapter_memory_id=memory_id)
+    await state.update_data(
+        new_chapter_memory_id=memory_id,
+        preview_message_id=callback.message.message_id,
+        preview_chat_id=callback.message.chat.id,
+    )
     await callback.message.answer("Напишите название новой главы:")
     await callback.answer()
 
@@ -692,6 +702,20 @@ async def handle_new_chapter_name(message: Message, state: FSMContext) -> None:
     asyncio.create_task(_refresh_style_profile(user.id, mem_text))
     asyncio.create_task(_refresh_characters(user.id, mem_text))
     asyncio.create_task(_refresh_thread_summary(chapter.id, chapter_title, mem_text))
+
+    # Switch the original preview message to saved state (remove action buttons)
+    preview_message_id = data.get("preview_message_id")
+    preview_chat_id = data.get("preview_chat_id")
+    if preview_message_id and preview_chat_id:
+        from bot.keyboards.inline_memory import saved_memory_kb
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=preview_chat_id,
+                message_id=preview_message_id,
+                reply_markup=saved_memory_kb(memory_id),
+            )
+        except Exception:
+            pass  # Message too old or already edited
 
     await message.answer(
         f"✅ Создана глава «{chapter_title}» и воспоминание сохранено!\n"
