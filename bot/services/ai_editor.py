@@ -56,10 +56,6 @@ async def edit_memoir(
     known_places: list[str] or list[tuple[str, int]].
     clarification_qa: list of {"role": "question"|"answer", "text": "..."} from clarifier loop.
     """
-    characters_str = format_characters_for_editor(known_characters) if known_characters else "нет данных"
-    places_str = _format_context_list(known_places) if known_places else "нет данных"
-    style_str = style_notes.strip() if style_notes else "профиль ещё формируется"
-
     qa_str = ""
     if clarification_qa:
         lines = []
@@ -78,9 +74,6 @@ async def edit_memoir(
                     "content": EDITOR_USER.format(
                         cleaned_transcript=cleaned_transcript,
                         clarification_qa=qa_str,
-                        known_characters=characters_str,
-                        known_places=places_str,
-                        style_notes=style_str,
                     ),
                 },
             ],
