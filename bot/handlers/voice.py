@@ -753,14 +753,9 @@ async def handle_edit_text(message: Message, state: FSMContext) -> None:
         original = memory.edited_memoir_text or memory.cleaned_transcript or ""
         already_saved = memory.approved
 
-    # Short text relative to original → treat as correction instruction (like voice)
-    # Long text (~full replacement) → use as-is
-    if original and len(new_text) < len(original) * 0.6:
-        processing_msg = await message.answer("⏳ Применяю исправления…")
-        corrected = await apply_corrections(original, new_text)
-        await processing_msg.delete()
-    else:
-        corrected = new_text
+    processing_msg = await message.answer("⏳ Применяю исправления…")
+    corrected = await apply_corrections(original, new_text)
+    await processing_msg.delete()
 
     async with async_session() as session:
         repo = Repository(session)
