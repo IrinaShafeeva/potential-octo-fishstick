@@ -225,6 +225,12 @@ class Repository:
         )
         await self.session.commit()
 
+    async def delete_memory(self, memory_id: int) -> None:
+        await self.session.execute(
+            delete(Memory).where(Memory.id == memory_id)
+        )
+        await self.session.commit()
+
     async def move_memory(self, memory_id: int, chapter_id: int) -> None:
         await self.session.execute(
             update(Memory).where(Memory.id == memory_id).values(chapter_id=chapter_id)

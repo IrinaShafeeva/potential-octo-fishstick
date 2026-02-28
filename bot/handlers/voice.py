@@ -534,6 +534,7 @@ async def cb_transcript_ok(callback: CallbackQuery, state: FSMContext) -> None:
     transcript = data.get("review_transcript", "")
     audio_file_id = data.get("review_audio_file_id")
     source_question_id = data.get("review_source_question_id")
+    redo_memory_id = data.get("redo_memory_id")
     from_user = callback.from_user
 
     if not transcript.strip():
@@ -543,6 +544,14 @@ async def cb_transcript_ok(callback: CallbackQuery, state: FSMContext) -> None:
         except Exception:
             pass
         return
+
+    # Delete old draft if this is a re-record
+    if redo_memory_id:
+        async with async_session() as session:
+            repo = Repository(session)
+            old = await repo.get_memory(redo_memory_id)
+            if old and not old.approved:
+                await repo.delete_memory(redo_memory_id)
 
     await state.clear()
     await callback.answer()
@@ -658,6 +667,7 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
 
     data = await state.get_data()
     source_question_id = data.get("answering_question_id")
+    redo_memory_id = data.get("redo_memory_id")
 
     preview = raw_transcript[:3500] + ("…" if len(raw_transcript) > 3500 else "")
     review_msg = await message.answer(
@@ -674,6 +684,7 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
         review_correction_round=0,
         review_message_id=review_msg.message_id,
         review_chat_id=review_msg.chat.id,
+        redo_memory_id=redo_memory_id,
     )
 
 
@@ -717,7 +728,16 @@ async def handle_text_memory(message: Message, state: FSMContext) -> None:
 
     data = await state.get_data()
     source_question_id = data.get("answering_question_id")
+    redo_memory_id = data.get("redo_memory_id")
     await state.clear()
+
+    # Delete old draft if this is a re-record
+    if redo_memory_id:
+        async with async_session() as session:
+            repo = Repository(session)
+            old = await repo.get_memory(redo_memory_id)
+            if old and not old.approved:
+                await repo.delete_memory(redo_memory_id)
 
     await _process_and_preview(
         message, text,
@@ -959,9 +979,14 @@ async def cb_new_chapter_for_memory(callback: CallbackQuery, state: FSMContext) 
 
 
 @router.callback_query(F.data.startswith("mem_redo:"))
-async def cb_redo_memory(callback: CallbackQuery) -> None:
+async def cb_redo_memory(callback: CallbackQuery, state: FSMContext) -> None:
+    memory_id = int(callback.data.split(":")[1])
+    await state.clear()
+    await state.set_state(MemoryStates.waiting_text_memory)
+    await state.update_data(redo_memory_id=memory_id)
     await callback.message.answer(
-        "Отправьте новое голосовое сообщение — я заменю предыдущее. 🎙"
+        "Отправьте голосовое сообщение или напишите текстом — "
+        "я заменю предыдущее."
     )
     await callback.answer()
 
