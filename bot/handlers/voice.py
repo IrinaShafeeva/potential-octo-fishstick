@@ -464,6 +464,62 @@ async def cb_transcript_ok(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
 
+@router.message(F.voice, MemoryStates.waiting_edit_text)
+async def handle_edit_voice(message: Message, state: FSMContext) -> None:
+    """User sends a voice correction instruction for an existing memory."""
+    data = await state.get_data()
+    memory_id = data.get("editing_memory_id")
+
+    if not memory_id:
+        await state.clear()
+        await message.answer("Не удалось определить, какое воспоминание редактируем.")
+        return
+
+    file = await bot.get_file(message.voice.file_id)
+    file_bytes = await bot.download_file(file.file_path)
+    audio_bytes = file_bytes.read()
+
+    processing_msg = await message.answer("⏳ Применяю исправления…")
+
+    stt_result = await transcribe_voice(audio_bytes)
+    correction_text = stt_result["text"]
+
+    if not correction_text:
+        await processing_msg.edit_text("Не удалось распознать. Попробуйте ещё раз. 🔇")
+        return
+
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+        if not memory:
+            await state.clear()
+            await processing_msg.edit_text("Воспоминание не найдено.")
+            return
+        original = memory.edited_memoir_text or memory.cleaned_transcript or ""
+        already_saved = memory.approved
+
+    corrected = await apply_corrections(original, correction_text)
+
+    async with async_session() as session:
+        repo = Repository(session)
+        await repo.update_memory_text(memory_id, corrected)
+
+    await state.clear()
+
+    from bot.keyboards.inline_memory import saved_memory_kb
+    preview = corrected[:800] + ("…" if len(corrected) > 800 else "")
+    if already_saved:
+        await processing_msg.edit_text(
+            f"✅ Текст обновлён!\n\n{preview}",
+            reply_markup=saved_memory_kb(memory_id),
+        )
+    else:
+        await processing_msg.edit_text(
+            f"✅ Текст обновлён! Сохранить в книгу?\n\n{preview}",
+            reply_markup=memory_preview_kb(memory_id),
+        )
+
+
 # ── Voice handler ──
 
 @router.message(F.voice)
@@ -805,8 +861,7 @@ async def cb_edit_text(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(editing_memory_id=memory_id)
     await state.set_state(MemoryStates.waiting_edit_text)
     await callback.message.answer(
-        "Отправьте исправленный текст — я заменю текущую версию.\n"
-        "Текущий текст можно скопировать из сообщения выше."
+        "Расскажите голосом, что исправить, или отправьте исправленный текст целиком."
     )
     await callback.answer()
 
