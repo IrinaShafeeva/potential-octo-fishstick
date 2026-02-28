@@ -162,13 +162,38 @@ class Repository:
         await self.session.commit()
 
     async def delete_chapter(self, chapter_id: int) -> None:
-        await self.session.execute(
-            update(Memory).where(Memory.chapter_id == chapter_id).values(chapter_id=None)
-        )
+        chapter = await self.get_chapter(chapter_id)
+        if not chapter:
+            return
+        fallback = await self._get_or_create_misc_chapter(chapter.user_id)
+        if fallback and fallback.id != chapter_id:
+            await self.session.execute(
+                update(Memory)
+                .where(Memory.chapter_id == chapter_id)
+                .values(chapter_id=fallback.id)
+            )
+        else:
+            await self.session.execute(
+                update(Memory)
+                .where(Memory.chapter_id == chapter_id)
+                .values(chapter_id=None)
+            )
         await self.session.execute(
             delete(Chapter).where(Chapter.id == chapter_id)
         )
         await self.session.commit()
+
+    async def _get_or_create_misc_chapter(self, user_id: int) -> "Chapter":
+        """Return the 'Разное' chapter, creating it if needed."""
+        result = await self.session.execute(
+            select(Chapter).where(
+                Chapter.user_id == user_id, Chapter.title == "Разное"
+            )
+        )
+        ch = result.scalar_one_or_none()
+        if ch:
+            return ch
+        return await self.create_chapter(user_id, "Разное")
 
     async def count_chapters(self, user_id: int) -> int:
         result = await self.session.execute(

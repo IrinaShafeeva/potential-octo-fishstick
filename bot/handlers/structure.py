@@ -172,7 +172,7 @@ async def cb_delete_chapter(callback: CallbackQuery) -> None:
     ])
     await callback.message.answer(
         f"Удалить главу «{chapter.title}»?\n"
-        "Воспоминания из неё останутся, но будут без главы.",
+        "Воспоминания из неё переместятся в «Разное».",
         reply_markup=kb,
     )
     await callback.answer()
