@@ -252,8 +252,18 @@ async def _pipeline(
                 await repo.set_user_gender(user_id, detected)
             ctx["gender"] = detected
 
+    # Build chapter summaries for clarifier context
+    chapter_summaries = [
+        {"title": ch.title, "summary": ch.thread_summary or ""}
+        for ch in ctx["chapters"]
+    ] if ctx["chapters"] else None
+
     # Ask clarifier before editing — if a question is needed, park the story in DB
-    clarification = await ask_clarification(cleaned, [])
+    clarification = await ask_clarification(
+        cleaned, [],
+        known_characters=ctx["known_characters"] or None,
+        chapter_summaries=chapter_summaries,
+    )
 
     # Create the draft memory (with or without clarification pending)
     async with async_session() as session:
@@ -299,9 +309,24 @@ async def _handle_clarification_answer(
 
     processing_msg = await message.answer("⏳ Думаю…")
 
+    # Fetch context for smarter clarification questions
+    async with async_session() as session:
+        repo = Repository(session)
+        user = await repo.get_user(message.from_user.id)
+    ctx = await _fetch_user_context(user.id) if user else {}
+
+    chapter_summaries = [
+        {"title": ch.title, "summary": ch.thread_summary or ""}
+        for ch in ctx.get("chapters", [])
+    ] or None
+
     # Ask clarifier for next action (if still within round limit)
     if current_round < MAX_CLARIFICATION_ROUNDS:
-        clarification = await ask_clarification(cleaned, thread)
+        clarification = await ask_clarification(
+            cleaned, thread,
+            known_characters=ctx.get("known_characters") or None,
+            chapter_summaries=chapter_summaries,
+        )
         if not clarification.get("is_complete"):
             question = clarification["question"]
             thread.append({"role": "question", "text": question})
@@ -313,12 +338,12 @@ async def _handle_clarification_answer(
 
     # "История полная" or max rounds — compile and show preview
     await processing_msg.edit_text("⏳ Редактирую для книги…")
-    async with async_session() as session:
-        repo = Repository(session)
-        user = await repo.get_user(message.from_user.id)
-        user_id = user.id
+    if not ctx:
+        async with async_session() as session:
+            repo = Repository(session)
+            user = await repo.get_user(message.from_user.id)
+        ctx = await _fetch_user_context(user.id)
 
-    ctx = await _fetch_user_context(user_id)
     await _run_editor_and_preview(
         message, processing_msg, pending.id, cleaned, thread,
         pending.source_question_id, state, ctx,
