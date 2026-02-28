@@ -10,11 +10,10 @@ def memory_fantasy_kb(memory_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📝 Точная версия", callback_data=f"show_strict:{memory_id}"),
             ],
             [
-                InlineKeyboardButton(text="🧩 Разбить на истории", callback_data=f"mem_split:{memory_id}"),
                 InlineKeyboardButton(text="🧷 В другую главу", callback_data=f"mem_move:{memory_id}"),
+                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
             ],
             [
-                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
                 InlineKeyboardButton(text="🎙 Перезаписать", callback_data=f"mem_redo:{memory_id}"),
             ],
         ]
@@ -30,11 +29,10 @@ def memory_preview_kb(memory_id: int, has_fantasy: bool = True) -> InlineKeyboar
         inline_keyboard=[
             first_row,
             [
-                InlineKeyboardButton(text="🧩 Разбить на истории", callback_data=f"mem_split:{memory_id}"),
                 InlineKeyboardButton(text="🧷 В другую главу", callback_data=f"mem_move:{memory_id}"),
+                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
             ],
             [
-                InlineKeyboardButton(text="✏️ Исправить текст", callback_data=f"mem_edit:{memory_id}"),
                 InlineKeyboardButton(text="🎙 Перезаписать", callback_data=f"mem_redo:{memory_id}"),
             ],
         ]
