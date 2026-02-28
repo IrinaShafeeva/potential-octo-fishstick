@@ -6,6 +6,8 @@ BTN_BOOK = "📖 Моя книга"
 BTN_CHAPTERS = "🧩 Структура глав"
 BTN_SUB = "⭐ Подписка"
 
+MENU_BUTTONS = frozenset({BTN_RECORD, BTN_QUESTIONS, BTN_BOOK, BTN_CHAPTERS, BTN_SUB})
+
 
 def main_menu_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(

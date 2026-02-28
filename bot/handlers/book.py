@@ -2,6 +2,7 @@ import logging
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, BufferedInputFile
+from aiogram.fsm.context import FSMContext
 
 from bot.db.engine import async_session
 from bot.db.repository import Repository
@@ -22,7 +23,8 @@ def _progress_bar(filled: int, total: int, length: int = 10) -> str:
 
 
 @router.message(F.text == "📖 Моя книга")
-async def show_book(message: Message) -> None:
+async def show_book(message: Message, state: FSMContext) -> None:
+    await state.clear()
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_user(message.from_user.id)

@@ -11,7 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from bot.config import settings
 from bot.db.engine import async_session
 from bot.db.repository import Repository
-from bot.keyboards.main_menu import main_menu_kb
+from bot.keyboards.main_menu import main_menu_kb, MENU_BUTTONS
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -62,7 +62,8 @@ def subscription_kb() -> InlineKeyboardMarkup:
 # ── Show subscription ──
 
 @router.message(F.text == "⭐ Подписка")
-async def show_subscription(message: Message) -> None:
+async def show_subscription(message: Message, state: FSMContext) -> None:
+    await state.clear()
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_user(message.from_user.id)
@@ -88,7 +89,7 @@ async def cb_enter_promo(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(PromoStates.waiting_promo_code)
+@router.message(PromoStates.waiting_promo_code, F.text.func(lambda t: t not in MENU_BUTTONS))
 async def handle_promo_code(message: Message, state: FSMContext) -> None:
     code = message.text.strip()
     await state.clear()

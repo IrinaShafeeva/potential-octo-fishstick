@@ -8,7 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from bot.config import settings
 from bot.db.engine import async_session
 from bot.db.repository import Repository
-from bot.keyboards.main_menu import main_menu_kb
+from bot.keyboards.main_menu import main_menu_kb, MENU_BUTTONS
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -20,7 +20,8 @@ class ChapterStates(StatesGroup):
 
 
 @router.message(F.text == "🧩 Структура глав")
-async def show_structure(message: Message) -> None:
+async def show_structure(message: Message, state: FSMContext) -> None:
+    await state.clear()
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_user(message.from_user.id)
@@ -87,7 +88,7 @@ async def cb_add_chapter(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(ChapterStates.waiting_title)
+@router.message(ChapterStates.waiting_title, F.text.func(lambda t: t not in MENU_BUTTONS))
 async def receive_chapter_title(message: Message, state: FSMContext) -> None:
     title = message.text.strip()
     if not title or len(title) > 200:
@@ -115,7 +116,7 @@ async def cb_rename_chapter(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(ChapterStates.waiting_rename)
+@router.message(ChapterStates.waiting_rename, F.text.func(lambda t: t not in MENU_BUTTONS))
 async def receive_rename(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     chapter_id = data.get("rename_chapter_id")
