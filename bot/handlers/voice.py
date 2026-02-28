@@ -129,9 +129,13 @@ async def _run_editor_and_preview(
     ctx: dict,
     *,
     user_telegram_id: int | None = None,
+    precomputed_chapter: tuple[str | None, str | None] | None = None,
 ) -> None:
     """Classify → edit (with QA context) → timeline → update memory → show preview."""
-    chapter_suggestion, thread_summary = await _classify_chapter(cleaned, ctx["chapters"])
+    if precomputed_chapter is not None:
+        chapter_suggestion, thread_summary = precomputed_chapter
+    else:
+        chapter_suggestion, thread_summary = await _classify_chapter(cleaned, ctx["chapters"])
 
     # Run strict and fantasy editors in parallel
     author_gender = ctx.get("gender")
@@ -252,17 +256,18 @@ async def _pipeline(
                 await repo.set_user_gender(user_id, detected)
             ctx["gender"] = detected
 
-    # Build chapter summaries for clarifier context
-    chapter_summaries = [
-        {"title": ch.title, "summary": ch.thread_summary or ""}
-        for ch in ctx["chapters"]
-    ] if ctx["chapters"] else None
+    # Classify chapter BEFORE clarification — gives clarifier targeted context
+    chapter_suggestion, thread_summary = await _classify_chapter(cleaned, ctx["chapters"])
+
+    clarifier_chapter_ctx = None
+    if chapter_suggestion:
+        clarifier_chapter_ctx = [{"title": chapter_suggestion, "summary": thread_summary or ""}]
 
     # Ask clarifier before editing — if a question is needed, park the story in DB
     clarification = await ask_clarification(
         cleaned, [],
         known_characters=ctx["known_characters"] or None,
-        chapter_summaries=chapter_summaries,
+        chapter_summaries=clarifier_chapter_ctx,
     )
 
     # Create the draft memory (with or without clarification pending)
@@ -274,6 +279,7 @@ async def _pipeline(
             raw_transcript=raw_transcript,
             cleaned_transcript=cleaned,
             source_question_id=source_question_id,
+            chapter_suggestion=chapter_suggestion,
         )
 
     if not clarification.get("is_complete"):
@@ -292,6 +298,7 @@ async def _pipeline(
     await _run_editor_and_preview(
         message, processing_msg, memory.id, cleaned, [], source_question_id, state, ctx,
         user_telegram_id=user_info.id if from_user else None,
+        precomputed_chapter=(chapter_suggestion, thread_summary),
     )
 
 
@@ -315,17 +322,22 @@ async def _handle_clarification_answer(
         user = await repo.get_user(message.from_user.id)
     ctx = await _fetch_user_context(user.id) if user else {}
 
-    chapter_summaries = [
-        {"title": ch.title, "summary": ch.thread_summary or ""}
-        for ch in ctx.get("chapters", [])
-    ] or None
+    # Use the chapter already classified at draft creation time
+    clarifier_chapter_ctx = None
+    if pending.chapter_suggestion:
+        summary = ""
+        for ch in ctx.get("chapters", []):
+            if ch.title == pending.chapter_suggestion:
+                summary = ch.thread_summary or ""
+                break
+        clarifier_chapter_ctx = [{"title": pending.chapter_suggestion, "summary": summary}]
 
     # Ask clarifier for next action (if still within round limit)
     if current_round < MAX_CLARIFICATION_ROUNDS:
         clarification = await ask_clarification(
             cleaned, thread,
             known_characters=ctx.get("known_characters") or None,
-            chapter_summaries=chapter_summaries,
+            chapter_summaries=clarifier_chapter_ctx,
         )
         if not clarification.get("is_complete"):
             question = clarification["question"]
@@ -344,6 +356,8 @@ async def _handle_clarification_answer(
             user = await repo.get_user(message.from_user.id)
         ctx = await _fetch_user_context(user.id)
 
+    # Reuse chapter from draft; clarification may have enriched the story
+    # so re-classification could yield a different result — let editor re-classify
     await _run_editor_and_preview(
         message, processing_msg, pending.id, cleaned, thread,
         pending.source_question_id, state, ctx,
