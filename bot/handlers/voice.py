@@ -831,11 +831,14 @@ async def _do_save_memory(callback: CallbackQuery, memory_id: int, use_fantasy: 
             await callback.answer("Воспоминание не найдено")
             return
 
+        if memory.approved:
+            await callback.answer("Уже сохранено")
+            return
+
         user = await repo.get_user(callback.from_user.id)
         chapters = await repo.get_chapters(user.id)
         suggestion = memory.chapter_suggestion
 
-        # Find or create the suggested chapter
         target_chapter = None
         if suggestion:
             target_chapter = next((ch for ch in chapters if ch.title == suggestion), None)
@@ -902,12 +905,21 @@ async def cb_move_to_chapter(callback: CallbackQuery) -> None:
 
     async with async_session() as session:
         repo = Repository(session)
-        await repo.approve_memory(memory_id, chapter_id)
-        user = await repo.get_user(callback.from_user.id)
-        new_count = await repo.increment_memories_count(user.id)
         memory = await repo.get_memory(memory_id)
+        if not memory:
+            await callback.answer("Воспоминание не найдено", show_alert=True)
+            return
+        user = await repo.get_user(callback.from_user.id)
         chapter = await repo.get_chapter(chapter_id)
-        await repo.update_topic_coverage(user.id, memory.tags or [])
+
+        was_already_saved = memory.approved
+        if was_already_saved:
+            await repo.move_memory(memory_id, chapter_id)
+            new_count = user.memories_count
+        else:
+            await repo.approve_memory(memory_id, chapter_id)
+            new_count = await repo.increment_memories_count(user.id)
+            await repo.update_topic_coverage(user.id, memory.tags or [])
 
     text = memory.edited_memoir_text or ""
     asyncio.create_task(_refresh_style_profile(user.id, text))
@@ -1145,14 +1157,19 @@ async def handle_new_chapter_name(message: Message, state: FSMContext) -> None:
             await message.answer("Пользователь не найден.")
             return
         chapter = await repo.create_chapter(user.id, chapter_title)
-        await repo.approve_memory(memory_id, chapter.id)
-        new_count = await repo.increment_memories_count(user.id)
         memory = await repo.get_memory(memory_id)
-        if memory:
-            await repo.update_topic_coverage(user.id, memory.tags or [])
-            mem_text = memory.edited_memoir_text or ""
+        was_already_saved = memory.approved if memory else False
+
+        if was_already_saved:
+            await repo.move_memory(memory_id, chapter.id)
+            new_count = user.memories_count
         else:
-            mem_text = ""
+            await repo.approve_memory(memory_id, chapter.id)
+            new_count = await repo.increment_memories_count(user.id)
+            if memory:
+                await repo.update_topic_coverage(user.id, memory.tags or [])
+
+        mem_text = memory.edited_memoir_text or "" if memory else ""
 
     asyncio.create_task(_refresh_style_profile(user.id, mem_text))
     asyncio.create_task(_refresh_characters(user.id, mem_text))
