@@ -591,21 +591,20 @@ async def handle_edit_voice(message: Message, state: FSMContext) -> None:
     async with async_session() as session:
         repo = Repository(session)
         await repo.update_memory_text(memory_id, corrected)
+        memory = await repo.get_memory(memory_id)
+        has_fantasy = bool(memory and memory.fantasy_memoir_text)
 
     await state.clear()
 
-    from bot.keyboards.inline_memory import saved_memory_kb
-    preview = corrected[:800] + ("…" if len(corrected) > 800 else "")
-    if already_saved:
-        await processing_msg.edit_text(
-            f"✅ Текст обновлён!\n\n{preview}",
-            reply_markup=saved_memory_kb(memory_id),
-        )
-    else:
-        await processing_msg.edit_text(
-            f"✅ Текст обновлён! Сохранить в книгу?\n\n{preview}",
-            reply_markup=memory_preview_kb(memory_id),
-        )
+    title = (memory.title or "Воспоминание") if memory else "Воспоминание"
+    chapter_line = ""
+    if memory and memory.chapter_suggestion:
+        chapter_line = f"\n📁 Глава: <b>{memory.chapter_suggestion}</b>"
+    preview = corrected[:1500] + ("…" if len(corrected) > 1500 else "")
+    await processing_msg.edit_text(
+        f"<b>{title}</b>{chapter_line}\n\n{preview}",
+        reply_markup=memory_preview_kb(memory_id, has_fantasy=has_fantasy),
+    )
 
 
 # ── Voice handler ──
@@ -760,19 +759,18 @@ async def handle_edit_text(message: Message, state: FSMContext) -> None:
     async with async_session() as session:
         repo = Repository(session)
         await repo.update_memory_text(memory_id, corrected)
+        memory = await repo.get_memory(memory_id)
+        has_fantasy = bool(memory and memory.fantasy_memoir_text)
 
-    from bot.keyboards.inline_memory import saved_memory_kb
-    preview = corrected[:800] + ("…" if len(corrected) > 800 else "")
-    if already_saved:
-        await message.answer(
-            f"✅ Текст обновлён!\n\n{preview}",
-            reply_markup=saved_memory_kb(memory_id),
-        )
-    else:
-        await message.answer(
-            f"✅ Текст обновлён! Сохранить в книгу?\n\n{preview}",
-            reply_markup=memory_preview_kb(memory_id),
-        )
+    title = (memory.title or "Воспоминание") if memory else "Воспоминание"
+    chapter_line = ""
+    if memory and memory.chapter_suggestion:
+        chapter_line = f"\n📁 Глава: <b>{memory.chapter_suggestion}</b>"
+    preview = corrected[:1500] + ("…" if len(corrected) > 1500 else "")
+    await message.answer(
+        f"<b>{title}</b>{chapter_line}\n\n{preview}",
+        reply_markup=memory_preview_kb(memory_id, has_fantasy=has_fantasy),
+    )
 
 
 # ── Helpers ──
