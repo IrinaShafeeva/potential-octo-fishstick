@@ -147,6 +147,20 @@ class Repository:
         )
         await self.session.commit()
 
+    async def swap_chapter_order(self, chapter_id_a: int, chapter_id_b: int) -> None:
+        """Swap order_index of two chapters."""
+        ch_a = await self.get_chapter(chapter_id_a)
+        ch_b = await self.get_chapter(chapter_id_b)
+        if not ch_a or not ch_b:
+            return
+        await self.session.execute(
+            update(Chapter).where(Chapter.id == chapter_id_a).values(order_index=ch_b.order_index)
+        )
+        await self.session.execute(
+            update(Chapter).where(Chapter.id == chapter_id_b).values(order_index=ch_a.order_index)
+        )
+        await self.session.commit()
+
     async def delete_chapter(self, chapter_id: int) -> None:
         await self.session.execute(
             update(Memory).where(Memory.chapter_id == chapter_id).values(chapter_id=None)

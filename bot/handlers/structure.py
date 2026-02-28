@@ -1,7 +1,7 @@
 import logging
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -12,6 +12,26 @@ from bot.keyboards.main_menu import main_menu_kb, MENU_BUTTONS
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+
+def _chapters_kb(chapters: list) -> InlineKeyboardMarkup:
+    """Build chapter management keyboard with reorder arrows and actions."""
+    buttons = []
+    for idx, ch in enumerate(chapters):
+        row = []
+        if idx > 0:
+            row.append(InlineKeyboardButton(text="⬆️", callback_data=f"ch_up:{ch.id}"))
+        else:
+            row.append(InlineKeyboardButton(text=" ", callback_data="ch_noop"))
+        row.append(InlineKeyboardButton(text=ch.title, callback_data=f"ch_rename:{ch.id}"))
+        if idx < len(chapters) - 1:
+            row.append(InlineKeyboardButton(text="⬇️", callback_data=f"ch_down:{ch.id}"))
+        else:
+            row.append(InlineKeyboardButton(text=" ", callback_data="ch_noop"))
+        row.append(InlineKeyboardButton(text="🗑", callback_data=f"ch_del:{ch.id}"))
+        buttons.append(row)
+    buttons.append([InlineKeyboardButton(text="➕ Добавить главу", callback_data="ch_add")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 class ChapterStates(StatesGroup):
@@ -51,20 +71,11 @@ async def show_structure(message: Message, state: FSMContext) -> None:
                 text += f" — {ch.period_hint}"
             text += "\n"
         text += (
-            "\nЧтобы добавить главу — просто напишите её название.\n"
-            "Чтобы переименовать — отправьте: /rename Номер Новое название"
+            "\n⬆️⬇️ — изменить порядок\n"
+            "Нажмите на название — переименовать"
         )
 
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    buttons = [[InlineKeyboardButton(text="➕ Добавить главу", callback_data="ch_add")]]
-    if chapters:
-        for ch in chapters:
-            buttons.append([
-                InlineKeyboardButton(text=f"✏️ {ch.title}", callback_data=f"ch_rename:{ch.id}"),
-                InlineKeyboardButton(text="🗑", callback_data=f"ch_del:{ch.id}"),
-            ])
-
-    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    kb = _chapters_kb(chapters)
     await message.answer(text, reply_markup=kb)
 
 
@@ -136,6 +147,40 @@ async def receive_rename(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("ch_del:"))
 async def cb_delete_chapter(callback: CallbackQuery) -> None:
+    """Step 1: show confirmation before deleting."""
+    chapter_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        chapter = await repo.get_chapter(chapter_id)
+
+    if not chapter:
+        await callback.answer("Глава не найдена", show_alert=True)
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Да, удалить",
+                callback_data=f"ch_del_confirm:{chapter_id}",
+            ),
+            InlineKeyboardButton(
+                text="Отмена",
+                callback_data="ch_del_cancel",
+            ),
+        ],
+    ])
+    await callback.message.answer(
+        f"Удалить главу «{chapter.title}»?\n"
+        "Воспоминания из неё останутся, но будут без главы.",
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("ch_del_confirm:"))
+async def cb_delete_chapter_confirm(callback: CallbackQuery) -> None:
+    """Step 2: actually delete after confirmation."""
     chapter_id = int(callback.data.split(":")[1])
 
     async with async_session() as session:
@@ -144,10 +189,78 @@ async def cb_delete_chapter(callback: CallbackQuery) -> None:
         title = chapter.title if chapter else "?"
         await repo.delete_chapter(chapter_id)
 
-    await callback.message.answer(
-        f"🗑 Глава «{title}» удалена. Воспоминания из неё остались без главы.",
-        reply_markup=main_menu_kb(),
+        user = await repo.get_user(callback.from_user.id)
+        chapters = await repo.get_chapters(user.id) if user else []
+
+    await callback.message.edit_text(
+        f"🗑 Глава «{title}» удалена.",
+        reply_markup=None,
     )
+
+    if chapters:
+        await callback.message.answer(
+            "📁 <b>Ваши главы:</b>",
+            reply_markup=_chapters_kb(chapters),
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "ch_del_cancel")
+async def cb_delete_cancel(callback: CallbackQuery) -> None:
+    await callback.message.edit_text("Удаление отменено.", reply_markup=None)
+    await callback.answer()
+
+
+# ── Reorder chapters ──
+
+@router.callback_query(F.data.startswith("ch_up:"))
+async def cb_chapter_up(callback: CallbackQuery) -> None:
+    chapter_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        user = await repo.get_user(callback.from_user.id)
+        if not user:
+            await callback.answer()
+            return
+        chapters = await repo.get_chapters(user.id)
+
+        for idx, ch in enumerate(chapters):
+            if ch.id == chapter_id and idx > 0:
+                await repo.swap_chapter_order(ch.id, chapters[idx - 1].id)
+                break
+
+        chapters = await repo.get_chapters(user.id)
+
+    await callback.message.edit_reply_markup(reply_markup=_chapters_kb(chapters))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("ch_down:"))
+async def cb_chapter_down(callback: CallbackQuery) -> None:
+    chapter_id = int(callback.data.split(":")[1])
+
+    async with async_session() as session:
+        repo = Repository(session)
+        user = await repo.get_user(callback.from_user.id)
+        if not user:
+            await callback.answer()
+            return
+        chapters = await repo.get_chapters(user.id)
+
+        for idx, ch in enumerate(chapters):
+            if ch.id == chapter_id and idx < len(chapters) - 1:
+                await repo.swap_chapter_order(ch.id, chapters[idx + 1].id)
+                break
+
+        chapters = await repo.get_chapters(user.id)
+
+    await callback.message.edit_reply_markup(reply_markup=_chapters_kb(chapters))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "ch_noop")
+async def cb_noop(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
