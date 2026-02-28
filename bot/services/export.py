@@ -98,8 +98,8 @@ async def export_book_pdf(
 
     try:
         pdf_bytes = pdf.output()
-        logger.info("PDF generated in memory for user_id=%d (%d bytes)", user_id, len(pdf_bytes))
-        return pdf_bytes
+        logger.info("PDF generated for user_id=%d (%d bytes)", user_id, len(pdf_bytes))
+        return bytes(pdf_bytes)
     except Exception as e:
-        logger.error("PDF export error: %s", e)
+        logger.error("PDF export error: %s", e, exc_info=True)
         return None

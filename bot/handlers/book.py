@@ -123,7 +123,9 @@ async def cb_export_pdf(callback: CallbackQuery) -> None:
             )
             return
 
-        chapters = await repo.get_chapters(user.id)
+        author_name = user.first_name or "Автор"
+        user_db_id = user.id
+        chapters = await repo.get_chapters(user_db_id)
         chapters_data = []
         for ch in chapters:
             memories = await repo.get_memories_by_chapter(ch.id)
@@ -144,14 +146,20 @@ async def cb_export_pdf(callback: CallbackQuery) -> None:
         await callback.message.answer("В книге пока нет воспоминаний.")
         return
 
+    processing_msg = await callback.message.answer("⏳ Генерирую PDF…")
+
     pdf_bytes = await export_book_pdf(
         chapters_data,
-        author_name=user.first_name or "Автор",
-        user_id=user.id,
+        author_name=author_name,
+        user_id=user_db_id,
     )
 
     if pdf_bytes:
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
         doc = BufferedInputFile(pdf_bytes, filename="Моя_книга_воспоминаний.pdf")
         await callback.message.answer_document(doc, caption="📖 Ваша книга воспоминаний")
     else:
-        await callback.message.answer("Не удалось создать PDF. Попробуйте позже.")
+        await processing_msg.edit_text("Не удалось создать PDF. Попробуйте позже.")
