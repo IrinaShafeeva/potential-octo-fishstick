@@ -153,6 +153,50 @@ async def fantasy_edit_memoir(
         return ""
 
 
+async def apply_corrections(original_text: str, user_instruction: str) -> str:
+    """Apply user's free-form corrections to a transcript.
+
+    The user describes errors in any format (voice or text), e.g.:
+    - "не Пангорица, а Подгорица"
+    - "замени бабушка Маша на бабушка Мария"
+    - "там было не 1985, а 1983 год"
+    The AI finds the mentioned errors and fixes them without touching anything else.
+    """
+    system_prompt = (
+        "Ты помощник, исправляющий ошибки в распознанном тексте.\n"
+        "Пользователь описывает ошибки в свободной форме — иногда голосом, "
+        "иногда текстом, в любом формате.\n\n"
+        "ПРАВИЛА:\n"
+        "- Примени ТОЛЬКО те исправления, о которых просит пользователь.\n"
+        "- НЕ меняй стиль, порядок слов, формулировки или пунктуацию.\n"
+        "- НЕ добавляй и не удаляй информацию.\n"
+        "- Если пользователь упоминает слово и его замену — найди максимально "
+        "похожее слово в тексте и замени.\n"
+        "- Если не можешь найти упомянутое слово — верни текст без изменений.\n"
+        "- Верни ТОЛЬКО исправленный текст, без комментариев и пояснений."
+    )
+    try:
+        response = await client.chat.completions.create(
+            model=settings.fast_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Исходный текст:\n{original_text}\n\n"
+                        f"Исправления от пользователя:\n{user_instruction}"
+                    ),
+                },
+            ],
+            temperature=0.1,
+            max_tokens=4000,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error("Apply corrections error: %s", e)
+        return original_text
+
+
 async def merge_clarification(memoir_text: str, clarification_answer: str) -> str:
     """Weave a clarification answer into an existing memoir text.
 

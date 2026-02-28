@@ -15,7 +15,7 @@ from bot.keyboards.inline_memory import memory_preview_kb, memory_fantasy_kb, ch
 from bot.keyboards.main_menu import main_menu_kb
 from bot.loader import bot
 from bot.services.stt import transcribe_voice
-from bot.services.ai_editor import clean_transcript, edit_memoir, fantasy_edit_memoir
+from bot.services.ai_editor import clean_transcript, edit_memoir, fantasy_edit_memoir, apply_corrections
 from bot.services.timeline import extract_timeline
 from bot.services.classifier import classify_chapter
 from bot.services.style_profiler import update_style_profile
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 MIN_VOICE_DURATION = 3
 STT_CONFIDENCE_THRESHOLD = 0.3
 MAX_CLARIFICATION_ROUNDS = 3
+MAX_TRANSCRIPT_CORRECTIONS = 5
 
 
 def _clarification_kb(memory_id: int) -> InlineKeyboardMarkup:
@@ -38,10 +39,17 @@ def _clarification_kb(memory_id: int) -> InlineKeyboardMarkup:
     ]])
 
 
+def _transcript_review_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Всё верно", callback_data="transcript_ok"),
+    ]])
+
+
 class MemoryStates(StatesGroup):
     waiting_edit_text = State()
     waiting_text_memory = State()
     waiting_new_chapter = State()
+    reviewing_transcript = State()
 
 
 def _detect_gender(text: str) -> str | None:
@@ -217,16 +225,19 @@ async def _pipeline(
     audio_file_id: str | None,
     source_question_id: str | None,
     state: FSMContext | None,
+    *,
+    from_user=None,
 ) -> None:
     cleaned = await clean_transcript(raw_transcript)
     await processing_msg.edit_text("⏳ Читаю историю…")
 
+    user_info = from_user or message.from_user
     async with async_session() as session:
         repo = Repository(session)
         user = await repo.get_or_create_user(
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name,
+            telegram_id=user_info.id,
+            username=user_info.username,
+            first_name=user_info.first_name,
         )
         user_id = user.id
 
@@ -270,6 +281,7 @@ async def _pipeline(
     await processing_msg.edit_text("⏳ Редактирую для книги…")
     await _run_editor_and_preview(
         message, processing_msg, memory.id, cleaned, [], source_question_id, state, ctx,
+        user_telegram_id=user_info.id if from_user else None,
     )
 
 
@@ -310,6 +322,130 @@ async def _handle_clarification_answer(
     await _run_editor_and_preview(
         message, processing_msg, pending.id, cleaned, thread,
         pending.source_question_id, state, ctx,
+    )
+
+
+# ── Transcript review & correction handlers ──
+# (registered before handle_voice so state filter takes priority)
+
+async def _start_pipeline_from_review(
+    message,
+    state: FSMContext,
+    transcript: str,
+    audio_file_id: str | None,
+    source_question_id: str | None,
+    from_user,
+) -> None:
+    """Run the full pipeline after user confirmed the transcript."""
+    processing_msg = await message.edit_text("⏳ Обрабатываю текст…")
+    try:
+        await _pipeline(
+            message, processing_msg, transcript,
+            audio_file_id, source_question_id, state,
+            from_user=from_user,
+        )
+    except Exception as e:
+        logger.error("Processing pipeline error: %s", e, exc_info=True)
+        await processing_msg.edit_text(
+            "Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏"
+        )
+        if state:
+            await state.clear()
+
+
+async def _apply_and_show_corrected(
+    message: Message,
+    state: FSMContext,
+    original: str,
+    correction_instruction: str,
+) -> None:
+    """Apply corrections and show updated transcript for review."""
+    data = await state.get_data()
+    round_num = data.get("review_correction_round", 0) + 1
+
+    processing_msg = await message.answer("⏳ Применяю исправления…")
+    corrected = await apply_corrections(original, correction_instruction)
+
+    await state.update_data(
+        review_transcript=corrected,
+        review_correction_round=round_num,
+    )
+
+    if round_num >= MAX_TRANSCRIPT_CORRECTIONS:
+        await state.update_data(review_transcript=corrected)
+        audio_file_id = data.get("review_audio_file_id")
+        source_question_id = data.get("review_source_question_id")
+        from_user = message.from_user
+        await state.clear()
+        await processing_msg.edit_text("⏳ Обрабатываю текст…")
+        try:
+            await _pipeline(
+                message, processing_msg, corrected,
+                audio_file_id, source_question_id, None,
+                from_user=from_user,
+            )
+        except Exception as e:
+            logger.error("Processing pipeline error: %s", e, exc_info=True)
+            await processing_msg.edit_text(
+                "Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏"
+            )
+        return
+
+    preview = corrected[:3500] + ("…" if len(corrected) > 3500 else "")
+    await processing_msg.edit_text(
+        f"📝 Исправленный текст:\n\n{preview}\n\n"
+        "Если всё верно — нажмите кнопку.\n"
+        "Если ещё есть ошибки — расскажите голосом или напишите, что исправить.",
+        reply_markup=_transcript_review_kb(),
+    )
+
+
+@router.message(F.voice, MemoryStates.reviewing_transcript)
+async def handle_transcript_correction_voice(message: Message, state: FSMContext) -> None:
+    """User sends a voice message to correct the transcript."""
+    file = await bot.get_file(message.voice.file_id)
+    file_bytes = await bot.download_file(file.file_path)
+    audio_bytes = file_bytes.read()
+
+    stt_result = await transcribe_voice(audio_bytes)
+    correction_text = stt_result["text"]
+
+    if not correction_text:
+        await message.answer("Не удалось распознать. Попробуйте ещё раз. 🔇")
+        return
+
+    data = await state.get_data()
+    original = data.get("review_transcript", "")
+    await _apply_and_show_corrected(message, state, original, correction_text)
+
+
+@router.message(F.text, MemoryStates.reviewing_transcript)
+async def handle_transcript_correction_text(message: Message, state: FSMContext) -> None:
+    """User sends a text message to correct the transcript."""
+    correction_text = message.text.strip()
+    if len(correction_text) < 2:
+        await message.answer("Напишите, что нужно исправить.")
+        return
+
+    data = await state.get_data()
+    original = data.get("review_transcript", "")
+    await _apply_and_show_corrected(message, state, original, correction_text)
+
+
+@router.callback_query(F.data == "transcript_ok")
+async def cb_transcript_ok(callback: CallbackQuery, state: FSMContext) -> None:
+    """User confirmed the transcript — proceed to full pipeline."""
+    data = await state.get_data()
+    transcript = data.get("review_transcript", "")
+    audio_file_id = data.get("review_audio_file_id")
+    source_question_id = data.get("review_source_question_id")
+    from_user = callback.from_user
+    await state.clear()
+
+    await callback.answer()
+    await _start_pipeline_from_review(
+        callback.message, state, transcript,
+        audio_file_id, source_question_id, from_user,
     )
 
 
@@ -365,11 +501,19 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     source_question_id = data.get("answering_question_id")
 
-    await _process_and_preview(
-        message, raw_transcript,
-        audio_file_id=message.voice.file_id,
-        source_question_id=source_question_id,
-        state=state,
+    preview = raw_transcript[:3500] + ("…" if len(raw_transcript) > 3500 else "")
+    await message.answer(
+        f"📝 Вот что я услышал:\n\n{preview}\n\n"
+        "Если всё верно — нажмите кнопку.\n"
+        "Если есть ошибки — расскажите голосом или напишите, что исправить.",
+        reply_markup=_transcript_review_kb(),
+    )
+    await state.set_state(MemoryStates.reviewing_transcript)
+    await state.update_data(
+        review_transcript=raw_transcript,
+        review_audio_file_id=message.voice.file_id,
+        review_source_question_id=source_question_id,
+        review_correction_round=0,
     )
 
 
