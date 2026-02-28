@@ -22,6 +22,12 @@ ONBOARDING_TEXT = (
 )
 
 
+WELCOME_BACK_TEXT = (
+    "С возвращением! Продолжайте рассказывать — "
+    "ваша книга ждёт новых историй. 📖"
+)
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     async with async_session() as session:
@@ -38,7 +44,12 @@ async def cmd_start(message: Message) -> None:
                 questions_data = json.load(f)
             await repo.load_questions(questions_data)
 
-    await message.answer(ONBOARDING_TEXT, reply_markup=onboarding_kb())
+        is_returning = user.memories_count > 0 or user.is_premium
+
+    if is_returning:
+        await message.answer(WELCOME_BACK_TEXT, reply_markup=main_menu_kb())
+    else:
+        await message.answer(ONBOARDING_TEXT, reply_markup=onboarding_kb())
 
 
 @router.message(F.text == "🎙 Начать говорить")
