@@ -419,6 +419,21 @@ async def handle_transcript_correction_voice(message: Message, state: FSMContext
     await _apply_and_show_corrected(message, state, original, correction_text)
 
 
+# ── Menu button handler ──
+# Registered before state-filtered text handlers so menu buttons
+# are never swallowed by waiting_text_memory / waiting_edit_text / etc.
+
+@router.message(F.text == "🎙 Записать воспоминание")
+async def prompt_record(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await state.set_state(MemoryStates.waiting_text_memory)
+    await message.answer(
+        "Отправьте голосовое сообщение или напишите текстом — "
+        "расскажите что-нибудь из жизни.\n\n"
+        "Говорите как вам удобно, я отредактирую для книги.",
+    )
+
+
 @router.message(F.text, MemoryStates.reviewing_transcript)
 async def handle_transcript_correction_text(message: Message, state: FSMContext) -> None:
     """User sends a text message to correct the transcript."""
@@ -601,18 +616,6 @@ async def handle_edit_text(message: Message, state: FSMContext) -> None:
             f"✅ Текст обновлён! Сохранить в книгу?\n\n{preview}",
             reply_markup=memory_preview_kb(memory_id),
         )
-
-
-# ── Button: record prompt ──
-
-@router.message(F.text == "🎙 Записать воспоминание")
-async def prompt_record(message: Message, state: FSMContext) -> None:
-    await state.set_state(MemoryStates.waiting_text_memory)
-    await message.answer(
-        "Отправьте голосовое сообщение или напишите текстом — "
-        "расскажите что-нибудь из жизни.\n\n"
-        "Говорите как вам удобно, я отредактирую для книги.",
-    )
 
 
 # ── Helpers ──
