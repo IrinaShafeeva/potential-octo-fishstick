@@ -12,7 +12,7 @@ from bot.config import settings
 from bot.db.engine import async_session
 from bot.db.repository import Repository
 from bot.keyboards.inline_memory import memory_preview_kb, memory_fantasy_kb, chapter_select_kb
-from bot.keyboards.main_menu import main_menu_kb
+from bot.keyboards.main_menu import main_menu_kb, MENU_BUTTONS
 from bot.loader import bot
 from bot.services.stt import transcribe_voice
 from bot.services.ai_editor import clean_transcript, edit_memoir, fantasy_edit_memoir, apply_corrections
@@ -376,7 +376,12 @@ async def _start_pipeline_from_review(
     from_user,
 ) -> None:
     """Run the full pipeline after user confirmed the transcript."""
-    processing_msg = await message.edit_text("⏳ Обрабатываю текст…")
+    try:
+        processing_msg = await message.edit_text("⏳ Обрабатываю текст…")
+    except Exception as e:
+        logger.error("Failed to edit review message: %s", e)
+        return
+
     try:
         await _pipeline(
             message, processing_msg, transcript,
@@ -385,9 +390,12 @@ async def _start_pipeline_from_review(
         )
     except Exception as e:
         logger.error("Processing pipeline error: %s", e, exc_info=True)
-        await processing_msg.edit_text(
-            "Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏"
-        )
+        try:
+            await processing_msg.edit_text(
+                "Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏"
+            )
+        except Exception:
+            pass
         if state:
             await state.clear()
 
@@ -398,11 +406,26 @@ async def _apply_and_show_corrected(
     original: str,
     correction_instruction: str,
 ) -> None:
-    """Apply corrections and show updated transcript for review."""
+    """Apply corrections and show updated transcript for review.
+
+    Edits the SAME review message to avoid stale inline-keyboard duplicates.
+    """
     data = await state.get_data()
     round_num = data.get("review_correction_round", 0) + 1
+    review_msg_id = data.get("review_message_id")
+    review_chat_id = data.get("review_chat_id")
 
-    processing_msg = await message.answer("⏳ Применяю исправления…")
+    # Show processing indicator in the original review message
+    if review_msg_id and review_chat_id:
+        try:
+            await bot.edit_message_text(
+                text="⏳ Применяю исправления…",
+                chat_id=review_chat_id,
+                message_id=review_msg_id,
+            )
+        except Exception:
+            pass
+
     corrected = await apply_corrections(original, correction_instruction)
 
     await state.update_data(
@@ -411,13 +434,16 @@ async def _apply_and_show_corrected(
     )
 
     if round_num >= MAX_TRANSCRIPT_CORRECTIONS:
-        await state.update_data(review_transcript=corrected)
         audio_file_id = data.get("review_audio_file_id")
         source_question_id = data.get("review_source_question_id")
         from_user = message.from_user
         await state.clear()
-        await processing_msg.edit_text("⏳ Обрабатываю текст…")
         try:
+            processing_msg = await bot.edit_message_text(
+                text="⏳ Обрабатываю текст…",
+                chat_id=review_chat_id,
+                message_id=review_msg_id,
+            )
             await _pipeline(
                 message, processing_msg, corrected,
                 audio_file_id, source_question_id, None,
@@ -425,18 +451,33 @@ async def _apply_and_show_corrected(
             )
         except Exception as e:
             logger.error("Processing pipeline error: %s", e, exc_info=True)
-            await processing_msg.edit_text(
-                "Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏"
-            )
+            try:
+                await bot.edit_message_text(
+                    text="Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏",
+                    chat_id=review_chat_id,
+                    message_id=review_msg_id,
+                )
+            except Exception:
+                await message.answer("Что-то пошло не так при обработке. Попробуйте ещё раз. 🙏")
         return
 
     preview = corrected[:3500] + ("…" if len(corrected) > 3500 else "")
-    await processing_msg.edit_text(
-        f"📝 Исправленный текст:\n\n{preview}\n\n"
-        "Если всё верно — нажмите кнопку.\n"
-        "Если ещё есть ошибки — расскажите голосом или напишите, что исправить.",
-        reply_markup=_transcript_review_kb(),
-    )
+    try:
+        await bot.edit_message_text(
+            text=f"📝 Исправленный текст:\n\n{preview}\n\n"
+                 "Если всё верно — нажмите кнопку.\n"
+                 "Если ещё есть ошибки — расскажите голосом или напишите, что исправить.",
+            chat_id=review_chat_id,
+            message_id=review_msg_id,
+            reply_markup=_transcript_review_kb(),
+        )
+    except Exception:
+        await message.answer(
+            f"📝 Исправленный текст:\n\n{preview}\n\n"
+            "Если всё верно — нажмите кнопку.\n"
+            "Если ещё есть ошибки — расскажите голосом или напишите, что исправить.",
+            reply_markup=_transcript_review_kb(),
+        )
 
 
 @router.message(F.voice, MemoryStates.reviewing_transcript)
@@ -473,7 +514,7 @@ async def prompt_record(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(F.text, MemoryStates.reviewing_transcript)
+@router.message(F.text.func(lambda t: t not in MENU_BUTTONS), MemoryStates.reviewing_transcript)
 async def handle_transcript_correction_text(message: Message, state: FSMContext) -> None:
     """User sends a text message to correct the transcript."""
     correction_text = message.text.strip()
@@ -494,8 +535,16 @@ async def cb_transcript_ok(callback: CallbackQuery, state: FSMContext) -> None:
     audio_file_id = data.get("review_audio_file_id")
     source_question_id = data.get("review_source_question_id")
     from_user = callback.from_user
-    await state.clear()
 
+    if not transcript.strip():
+        await callback.answer("Текст уже обработан.", show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+
+    await state.clear()
     await callback.answer()
     await _start_pipeline_from_review(
         callback.message, state, transcript,
@@ -612,7 +661,7 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
     source_question_id = data.get("answering_question_id")
 
     preview = raw_transcript[:3500] + ("…" if len(raw_transcript) > 3500 else "")
-    await message.answer(
+    review_msg = await message.answer(
         f"📝 Вот что я услышал:\n\n{preview}\n\n"
         "Если всё верно — нажмите кнопку.\n"
         "Если есть ошибки — расскажите голосом или напишите, что исправить.",
@@ -624,12 +673,14 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
         review_audio_file_id=message.voice.file_id,
         review_source_question_id=source_question_id,
         review_correction_round=0,
+        review_message_id=review_msg.message_id,
+        review_chat_id=review_msg.chat.id,
     )
 
 
 # ── Text-as-memory handler (explicit text mode) ──
 
-@router.message(F.text, MemoryStates.waiting_text_memory)
+@router.message(F.text.func(lambda t: t not in MENU_BUTTONS), MemoryStates.waiting_text_memory)
 async def handle_text_memory(message: Message, state: FSMContext) -> None:
     """User explicitly chose to write a memory as text."""
     text = message.text.strip()
@@ -677,7 +728,7 @@ async def handle_text_memory(message: Message, state: FSMContext) -> None:
 
 # ── Edit text flow ──
 
-@router.message(F.text, MemoryStates.waiting_edit_text)
+@router.message(F.text.func(lambda t: t not in MENU_BUTTONS), MemoryStates.waiting_edit_text)
 async def handle_edit_text(message: Message, state: FSMContext) -> None:
     """User sends corrected text for an existing memory."""
     data = await state.get_data()
@@ -982,7 +1033,22 @@ async def cb_other_clarification(callback: CallbackQuery, state: FSMContext) -> 
     await callback.answer()
     processing_msg = await callback.message.edit_text("⏳ Думаю…")
 
-    clarification = await ask_clarification(cleaned, thread)
+    ctx = await _fetch_user_context(user_id)
+
+    clarifier_chapter_ctx = None
+    if memory.chapter_suggestion:
+        summary = ""
+        for ch in ctx.get("chapters", []):
+            if ch.title == memory.chapter_suggestion:
+                summary = ch.thread_summary or ""
+                break
+        clarifier_chapter_ctx = [{"title": memory.chapter_suggestion, "summary": summary}]
+
+    clarification = await ask_clarification(
+        cleaned, thread,
+        known_characters=ctx.get("known_characters") or None,
+        chapter_summaries=clarifier_chapter_ctx,
+    )
 
     if not clarification.get("is_complete"):
         question = clarification["question"]
@@ -992,9 +1058,7 @@ async def cb_other_clarification(callback: CallbackQuery, state: FSMContext) -> 
             await repo.set_clarification_state(memory_id, thread, memory.clarification_round)
         await processing_msg.edit_text(f"💬 {question}", reply_markup=_clarification_kb(memory_id))
     else:
-        # No more questions — go to editor
         await processing_msg.edit_text("⏳ Редактирую для книги…")
-        ctx = await _fetch_user_context(user_id)
         qa_answers = [e for e in thread if e["role"] == "answer"]
         await _run_editor_and_preview(
             callback.message, processing_msg, memory_id, cleaned,
@@ -1058,7 +1122,7 @@ async def cb_show_fantasy_version(callback: CallbackQuery) -> None:
 
 # ── New chapter name input ──
 
-@router.message(F.text, MemoryStates.waiting_new_chapter)
+@router.message(F.text.func(lambda t: t not in MENU_BUTTONS), MemoryStates.waiting_new_chapter)
 async def handle_new_chapter_name(message: Message, state: FSMContext) -> None:
     """User typed a new chapter title — create chapter and save the memory."""
     data = await state.get_data()
