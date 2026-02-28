@@ -740,18 +740,34 @@ async def handle_edit_text(message: Message, state: FSMContext) -> None:
         return
 
     new_text = message.text.strip()
-    if len(new_text) < 10:
-        await message.answer("Текст слишком короткий.")
+    if len(new_text) < 2:
+        await message.answer("Напишите, что нужно исправить.")
         return
 
     async with async_session() as session:
         repo = Repository(session)
-        await repo.update_memory_text(memory_id, new_text)
         memory = await repo.get_memory(memory_id)
-        already_saved = memory and memory.approved
+        if not memory:
+            await message.answer("Воспоминание не найдено.")
+            return
+        original = memory.edited_memoir_text or memory.cleaned_transcript or ""
+        already_saved = memory.approved
+
+    # Short text relative to original → treat as correction instruction (like voice)
+    # Long text (~full replacement) → use as-is
+    if original and len(new_text) < len(original) * 0.6:
+        processing_msg = await message.answer("⏳ Применяю исправления…")
+        corrected = await apply_corrections(original, new_text)
+        await processing_msg.delete()
+    else:
+        corrected = new_text
+
+    async with async_session() as session:
+        repo = Repository(session)
+        await repo.update_memory_text(memory_id, corrected)
 
     from bot.keyboards.inline_memory import saved_memory_kb
-    preview = new_text[:800] + ("…" if len(new_text) > 800 else "")
+    preview = corrected[:800] + ("…" if len(corrected) > 800 else "")
     if already_saved:
         await message.answer(
             f"✅ Текст обновлён!\n\n{preview}",
