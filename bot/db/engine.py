@@ -23,6 +23,8 @@ async def init_db() -> None:
         "ALTER TABLE memories ADD COLUMN chapter_suggestion VARCHAR(500)",
         "ALTER TABLE memories ADD COLUMN fantasy_memoir_text TEXT",
         "ALTER TABLE users ADD COLUMN gender VARCHAR(10)",
+        "ALTER TABLE users ALTER COLUMN telegram_id TYPE BIGINT",
+        "ALTER TABLE payment_log ALTER COLUMN telegram_id TYPE BIGINT",
     ]
     for stmt in migrations:
         try:

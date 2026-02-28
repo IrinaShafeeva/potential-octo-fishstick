@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -22,7 +23,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    telegram_id = Column(Integer, unique=True, nullable=False, index=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -171,7 +172,7 @@ class PaymentLog(Base):
     __tablename__ = "payment_log"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    telegram_id = Column(Integer, nullable=False)
+    telegram_id = Column(BigInteger, nullable=False)
     provider = Column(String(50), default="tribute")
     product = Column(String(100), nullable=True)
     amount = Column(Float, nullable=True)
