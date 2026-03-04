@@ -1,19 +1,50 @@
-"""Tribute payment webhook handler.
+"""Tribute payment webhook handler + REST API for mobile app + Mini App.
 
 Runs as an aiohttp web server alongside the bot.
-Receives POST /webhook/tribute with payment confirmation,
-verifies signature, and activates premium.
+- POST /webhook/tribute — payment confirmation
+- /api/v1/* — REST API (auth, user, chapters, memories, book, subscription)
+- /miniapp — Telegram Mini App
 """
 import hashlib
 import hmac
 import json
 import logging
+from pathlib import Path
 
 from aiohttp import web
 
 from bot.config import settings
 from bot.db.engine import async_session
 from bot.db.repository import Repository
+
+from api.middleware import cors_middleware
+from api.auth import auth_google, auth_apple, auth_register, auth_login, auth_telegram
+from api.routes_user import get_me, patch_me
+from api.routes_chapters import (
+    get_chapters,
+    create_chapter,
+    patch_chapter,
+    delete_chapter,
+    reorder_chapters,
+)
+from api.routes_memories import (
+    post_memories_text,
+    post_memories_audio,
+    patch_memory_transcript,
+    post_correct_transcript,
+    post_confirm_transcript,
+    get_clarification,
+    post_clarification,
+    post_skip_clarification,
+    get_memory,
+    post_edit,
+    post_save,
+    post_move,
+    delete_memory,
+    post_fantasy,
+)
+from api.routes_book import get_book, get_book_pdf, get_book_progress
+from api.routes_subscription import get_subscription, post_promo
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +125,56 @@ async def handle_health(request: web.Request) -> web.Response:
 
 
 def create_webhook_app() -> web.Application:
-    app = web.Application()
+    app = web.Application(middlewares=[cors_middleware])
     app.router.add_post("/webhook/tribute", handle_tribute_webhook)
     app.router.add_get("/health", handle_health)
+
+    # API v1 for mobile app
+    app.router.add_post("/api/v1/auth/google", auth_google)
+    app.router.add_post("/api/v1/auth/apple", auth_apple)
+    app.router.add_post("/api/v1/auth/register", auth_register)
+    app.router.add_post("/api/v1/auth/login", auth_login)
+    app.router.add_post("/api/v1/auth/telegram", auth_telegram)
+    app.router.add_get("/api/v1/me", get_me)
+    app.router.add_patch("/api/v1/me", patch_me)
+    app.router.add_get("/api/v1/chapters", get_chapters)
+    app.router.add_post("/api/v1/chapters", create_chapter)
+    app.router.add_patch("/api/v1/chapters/{id}", patch_chapter)
+    app.router.add_delete("/api/v1/chapters/{id}", delete_chapter)
+    app.router.add_post("/api/v1/chapters/reorder", reorder_chapters)
+    app.router.add_post("/api/v1/memories/text", post_memories_text)
+    app.router.add_post("/api/v1/memories/audio", post_memories_audio)
+    app.router.add_patch("/api/v1/memories/{id}", patch_memory_transcript)
+    app.router.add_post("/api/v1/memories/{id}/correct-transcript", post_correct_transcript)
+    app.router.add_post("/api/v1/memories/{id}/confirm-transcript", post_confirm_transcript)
+    app.router.add_get("/api/v1/memories/{id}/clarification", get_clarification)
+    app.router.add_post("/api/v1/memories/{id}/clarification", post_clarification)
+    app.router.add_post("/api/v1/memories/{id}/skip-clarification", post_skip_clarification)
+    app.router.add_get("/api/v1/memories/{id}", get_memory)
+    app.router.add_post("/api/v1/memories/{id}/edit", post_edit)
+    app.router.add_post("/api/v1/memories/{id}/save", post_save)
+    app.router.add_post("/api/v1/memories/{id}/move", post_move)
+    app.router.add_delete("/api/v1/memories/{id}", delete_memory)
+    app.router.add_post("/api/v1/memories/{id}/fantasy", post_fantasy)
+    app.router.add_get("/api/v1/book", get_book)
+    app.router.add_get("/api/v1/book/pdf", get_book_pdf)
+    app.router.add_get("/api/v1/book/progress", get_book_progress)
+    app.router.add_get("/api/v1/subscription", get_subscription)
+    app.router.add_post("/api/v1/subscription/promo", post_promo)
+
+    # Mini App static files
+    miniapp_dir = Path(__file__).resolve().parent.parent.parent / "miniapp"
+    if miniapp_dir.exists():
+        app.router.add_static("/miniapp", miniapp_dir, name="miniapp")
+        async def serve_miniapp_index(request):
+            index_path = miniapp_dir / "index.html"
+            if index_path.exists():
+                return web.FileResponse(index_path)
+            raise web.HTTPNotFound()
+        app.router.add_get("/miniapp", serve_miniapp_index)
+        app.router.add_get("/miniapp/", serve_miniapp_index)
+        logger.info("Mini App served from %s", miniapp_dir)
+    else:
+        logger.warning("Mini App dir not found: %s", miniapp_dir)
+
     return app

@@ -12,6 +12,8 @@ services:
           property: connectionString
 
       # Set these manually in Render dashboard → Environment
+      - key: MINI_APP_URL
+        sync: false
       - key: BOT_TOKEN
         sync: false
       - key: OPENAI_API_KEY

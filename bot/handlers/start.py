@@ -3,9 +3,10 @@ import logging
 from pathlib import Path
 
 from aiogram import Router, F
-from aiogram.filters import CommandStart
-from aiogram.types import Message
+from aiogram.filters import Command, CommandStart
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
+from bot.config import settings
 from bot.db.engine import async_session
 from bot.db.repository import Repository
 from bot.keyboards.main_menu import main_menu_kb, onboarding_kb
@@ -71,4 +72,19 @@ async def onboarding_chapters(message: Message) -> None:
         "• Работа и карьера\n\n"
         "Или просто отправьте голосовое — я сам подберу главу.",
         reply_markup=main_menu_kb(),
+    )
+
+
+@router.message(Command("app"))
+async def cmd_app(message: Message) -> None:
+    """Команда /app — открыть Mini App."""
+    if not settings.mini_app_url:
+        await message.answer("Приложение временно недоступно.")
+        return
+    miniapp_url = settings.mini_app_url.rstrip("/") + "/miniapp"
+    await message.answer(
+        "📱 Откройте приложение:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Открыть приложение", web_app=WebAppInfo(url=miniapp_url))],
+        ]),
     )

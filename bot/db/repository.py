@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import (
     User, Chapter, Memory, Question, QuestionLog, TopicCoverage,
-    PromoCode, PromoRedemption, PaymentLog, Character,
+    PromoCode, PromoRedemption, PaymentLog, Character, AppAuth,
 )
 
 
@@ -38,6 +38,24 @@ class Repository:
             select(User).where(User.telegram_id == telegram_id)
         )
         return result.scalar_one_or_none()
+
+    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+        result = await self.session.execute(
+            select(User).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def is_premium_by_user_id(self, user_id: int) -> bool:
+        user = await self.get_user_by_id(user_id)
+        if not user or not user.is_premium:
+            return False
+        if user.premium_until and user.premium_until < datetime.utcnow():
+            await self.session.execute(
+                update(User).where(User.id == user_id).values(is_premium=False)
+            )
+            await self.session.commit()
+            return False
+        return True
 
     async def set_premium(self, user_id: int, until: datetime) -> None:
         await self.session.execute(
@@ -94,6 +112,64 @@ class Repository:
             select(User.memories_count).where(User.id == user_id)
         )
         return result.scalar_one()
+
+    # ── AppAuth (mobile app) ──
+
+    async def get_app_auth_by_google_id(self, google_id: str) -> Optional[AppAuth]:
+        result = await self.session.execute(
+            select(AppAuth).where(AppAuth.google_id == google_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_app_auth_by_apple_sub(self, apple_sub: str) -> Optional[AppAuth]:
+        result = await self.session.execute(
+            select(AppAuth).where(AppAuth.apple_sub == apple_sub)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_app_auth_by_email(self, email: str) -> Optional[AppAuth]:
+        result = await self.session.execute(
+            select(AppAuth).where(func.lower(AppAuth.email) == email.lower().strip())
+        )
+        return result.scalar_one_or_none()
+
+    async def create_app_user_and_auth(
+        self,
+        *,
+        google_id: str | None = None,
+        apple_sub: str | None = None,
+        email: str | None = None,
+        password_hash: str | None = None,
+        first_name: str | None = None,
+    ) -> tuple[User, AppAuth]:
+        """Create new User (telegram_id=None) and AppAuth. Caller must commit."""
+        user = User(telegram_id=None, first_name=first_name or "Пользователь")
+        self.session.add(user)
+        await self.session.flush()
+        app_auth = AppAuth(
+            user_id=user.id,
+            google_id=google_id,
+            apple_sub=apple_sub,
+            email=email,
+            password_hash=password_hash,
+        )
+        self.session.add(app_auth)
+        await self.session.commit()
+        await self.session.refresh(user)
+        await self.session.refresh(app_auth)
+        return user, app_auth
+
+    async def link_google_to_app_auth(self, app_auth_id: int, google_id: str) -> None:
+        await self.session.execute(
+            update(AppAuth).where(AppAuth.id == app_auth_id).values(google_id=google_id)
+        )
+        await self.session.commit()
+
+    async def link_apple_to_app_auth(self, app_auth_id: int, apple_sub: str) -> None:
+        await self.session.execute(
+            update(AppAuth).where(AppAuth.id == app_auth_id).values(apple_sub=apple_sub)
+        )
+        await self.session.commit()
 
     # ── Chapters ──
 
@@ -159,6 +235,16 @@ class Repository:
         await self.session.execute(
             update(Chapter).where(Chapter.id == chapter_id_b).values(order_index=ch_a.order_index)
         )
+        await self.session.commit()
+
+    async def reorder_chapters_by_ids(self, user_id: int, chapter_ids: list[int]) -> None:
+        """Set order_index for each chapter based on position in list."""
+        for i, ch_id in enumerate(chapter_ids):
+            await self.session.execute(
+                update(Chapter)
+                .where(Chapter.id == ch_id, Chapter.user_id == user_id)
+                .values(order_index=i)
+            )
         await self.session.commit()
 
     async def delete_chapter(self, chapter_id: int) -> None:

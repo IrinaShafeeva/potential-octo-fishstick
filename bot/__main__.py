@@ -5,6 +5,8 @@ from pathlib import Path
 
 from aiohttp import web
 
+from aiogram.types import MenuButtonWebApp, WebAppInfo
+
 from bot.loader import bot, dp
 from bot.handlers import register_all_handlers
 from bot.db.engine import init_db, async_session
@@ -42,6 +44,21 @@ async def main() -> None:
     site = web.TCPSite(runner, settings.webhook_host, settings.webhook_port)
     await site.start()
     logging.info("Webhook server started on %s:%d", settings.webhook_host, settings.webhook_port)
+
+    if not settings.mini_app_url:
+        logging.warning("MINI_APP_URL not set — add it in Render Environment to enable Mini App button")
+
+    if settings.mini_app_url:
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="📖 Открыть приложение",
+                    web_app=WebAppInfo(url=settings.mini_app_url.rstrip("/") + "/miniapp"),
+                )
+            )
+            logging.info("Mini App menu button set: %s", settings.mini_app_url)
+        except Exception as e:
+            logging.warning("Failed to set Mini App menu button: %s", e)
 
     logging.info("Bot starting…")
     try:

@@ -36,11 +36,21 @@ class Settings(BaseSettings):
     webhook_host: str = "0.0.0.0"
     webhook_port: int = 8080
 
+    # Mini App URL (HTTPS required for production, e.g. https://your-domain.com/miniapp)
+    mini_app_url: str = ""
+
     # Admin (your Telegram ID for /admin commands)
     admin_telegram_id: int = 0
 
     # Premium duration in days
     premium_days: int = 90
+
+    # API auth (for mobile app)
+    jwt_secret: str = "k9V4sQ2mZx8T1rYpWc6L0JdA3uN7eHfG5BqRzXnCw4UoS8tE1KpM6aV2yD9hFjLs"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_hours: int = 168  # 7 days
+    google_client_id: str = ""  # for verifying Google idToken
+    google_ios_client_id: str = ""  # optional, for iOS
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

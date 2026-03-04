@@ -23,7 +23,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=True, index=True)  # NULL for app-only users
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -166,6 +166,19 @@ class PromoRedemption(Base):
     promo_code_id = Column(Integer, ForeignKey("promo_codes.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     redeemed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AppAuth(Base):
+    """Links app authentication (Google, Apple, Email) to User. For mobile app users."""
+    __tablename__ = "app_auth"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    email = Column(String(255), unique=True, nullable=True, index=True)
+    password_hash = Column(String(255), nullable=True)
+    google_id = Column(String(255), unique=True, nullable=True, index=True)
+    apple_sub = Column(String(255), unique=True, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class PaymentLog(Base):

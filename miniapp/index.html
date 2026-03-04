@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Мои воспоминания</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <link rel="stylesheet" href="/miniapp/styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="loading">Загрузка…</div>
+    <div id="screens" class="hidden">
+      <!-- Home -->
+      <div id="screen-home" class="screen">
+        <header class="header">
+          <h1>Привет<span id="user-name"></span></h1>
+          <p class="subtitle">Моя книга воспоминаний</p>
+          <p id="stats" class="stats"></p>
+        </header>
+        <nav class="cards">
+          <button class="card" data-screen="record">
+            <span class="card-icon">🎙</span>
+            <span class="card-title">Записать воспоминание</span>
+            <span class="card-desc">Голосом или текстом</span>
+          </button>
+          <button class="card" data-screen="book">
+            <span class="card-icon">📖</span>
+            <span class="card-title">Моя книга</span>
+            <span class="card-desc">Читать и скачать PDF</span>
+          </button>
+          <button class="card" data-screen="chapters">
+            <span class="card-icon">🧩</span>
+            <span class="card-title">Главы</span>
+            <span class="card-desc">Управление главами</span>
+          </button>
+          <button class="card" data-screen="subscription">
+            <span class="card-icon">⭐</span>
+            <span class="card-title">Подписка</span>
+            <span id="sub-status" class="card-desc">Оформить</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Record -->
+      <div id="screen-record" class="screen hidden">
+        <header class="header">
+          <button class="back" data-back>← Назад</button>
+          <h2>Записать воспоминание</h2>
+        </header>
+        <div class="form">
+          <textarea id="memory-text" placeholder="Расскажите что-нибудь из жизни…" rows="5"></textarea>
+          <button id="btn-save-memory" class="btn-primary">Сохранить</button>
+          <p id="record-hint" class="hint">Или отправьте голосовое в боте — там доступна запись голосом</p>
+        </div>
+      </div>
+
+      <!-- Book -->
+      <div id="screen-book" class="screen hidden">
+        <header class="header">
+          <button class="back" data-back>← Назад</button>
+          <h2>Моя книга</h2>
+        </header>
+        <div id="book-content" class="book-content"></div>
+        <div class="book-actions">
+          <button id="btn-download-pdf" class="btn-primary">Скачать PDF</button>
+        </div>
+      </div>
+
+      <!-- Chapters -->
+      <div id="screen-chapters" class="screen hidden">
+        <header class="header">
+          <button class="back" data-back>← Назад</button>
+          <h2>Главы</h2>
+          <p class="hint">Зажмите и перетащите главу, чтобы изменить порядок</p>
+        </header>
+        <div id="chapters-list" class="chapters-list"></div>
+        <div class="form">
+          <input type="text" id="new-chapter-title" placeholder="Название новой главы">
+          <button id="btn-add-chapter" class="btn-primary">Добавить главу</button>
+        </div>
+      </div>
+
+      <!-- Subscription -->
+      <div id="screen-subscription" class="screen hidden">
+        <header class="header">
+          <button class="back" data-back>← Назад</button>
+          <h2>Подписка</h2>
+        </header>
+        <div id="sub-info" class="sub-info"></div>
+        <div class="form">
+          <input type="text" id="promo-code" placeholder="Промокод">
+          <button id="btn-redeem" class="btn-primary">Активировать</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/miniapp/app.js"></script>
+</body>
+</html>

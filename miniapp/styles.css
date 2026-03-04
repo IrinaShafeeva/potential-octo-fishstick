@@ -1,0 +1,263 @@
+:root {
+  --tg-theme-bg-color: #ffffff;
+  --tg-theme-text-color: #000000;
+  --tg-theme-hint-color: #999999;
+  --tg-theme-link-color: #2481cc;
+  --tg-theme-button-color: #2481cc;
+  --tg-theme-button-text-color: #ffffff;
+  --tg-theme-secondary-bg-color: #f4f4f5;
+  --radius: 12px;
+  --spacing: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+  min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--spacing);
+}
+
+#loading {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--tg-theme-hint-color);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.screen {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.header h1, .header h2 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: var(--tg-theme-hint-color);
+}
+
+.stats {
+  font-size: 14px;
+  color: var(--tg-theme-hint-color);
+}
+
+.back {
+  background: none;
+  border: none;
+  color: var(--tg-theme-link-color);
+  font-size: 16px;
+  padding: 0 0 12px 0;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: var(--spacing);
+  background: var(--tg-theme-secondary-bg-color);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.card:active {
+  opacity: 0.85;
+}
+
+.card-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.card-desc {
+  font-size: 14px;
+  color: var(--tg-theme-hint-color);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form textarea,
+.form input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-family: inherit;
+  background: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+}
+
+.form textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.form textarea::placeholder,
+.form input::placeholder {
+  color: var(--tg-theme-hint-color);
+}
+
+.btn-primary {
+  padding: 14px 24px;
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:active {
+  opacity: 0.9;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color);
+  margin: 0;
+}
+
+.book-content {
+  margin-bottom: 24px;
+}
+
+.chapter-block {
+  margin-bottom: 24px;
+}
+
+.chapter-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.memory-block {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--tg-theme-secondary-bg-color);
+  border-radius: 8px;
+}
+
+.memory-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.memory-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tg-theme-text-color);
+}
+
+.chapters-list {
+  margin-bottom: 24px;
+}
+
+.chapter-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--tg-theme-secondary-bg-color);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.chapter-item:active {
+  cursor: grabbing;
+}
+
+.chapter-item.sortable-ghost {
+  opacity: 0.4;
+}
+
+.chapter-item-title {
+  font-weight: 500;
+}
+
+.chapter-item-count {
+  font-size: 14px;
+  color: var(--tg-theme-hint-color);
+}
+
+.sub-info {
+  padding: 16px;
+  background: var(--tg-theme-secondary-bg-color);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+}
+
+.sub-info p {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+}
+
+.sub-info p:last-child {
+  margin-bottom: 0;
+}
+
+.book-actions {
+  margin-top: 16px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--tg-theme-hint-color);
+}

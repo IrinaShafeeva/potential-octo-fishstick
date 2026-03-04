@@ -16,6 +16,7 @@ async def init_db() -> None:
     # doesn't abort or roll back the others
     from sqlalchemy import text
     migrations = [
+        "ALTER TABLE users ALTER COLUMN telegram_id DROP NOT NULL",
         "ALTER TABLE users ADD COLUMN style_notes TEXT",
         "ALTER TABLE chapters ADD COLUMN thread_summary TEXT",
         "ALTER TABLE memories ADD COLUMN clarification_thread TEXT",
