@@ -162,17 +162,19 @@ def create_webhook_app() -> web.Application:
     app.router.add_get("/api/v1/subscription", get_subscription)
     app.router.add_post("/api/v1/subscription/promo", post_promo)
 
-    # Mini App static files
+    # Mini App — explicit routes first (before add_static to avoid 403)
     miniapp_dir = Path(__file__).resolve().parent.parent.parent / "miniapp"
     if miniapp_dir.exists():
-        app.router.add_static("/miniapp", miniapp_dir, name="miniapp")
+        index_path = miniapp_dir / "index.html"
+
         async def serve_miniapp_index(request):
-            index_path = miniapp_dir / "index.html"
             if index_path.exists():
                 return web.FileResponse(index_path)
             raise web.HTTPNotFound()
+
         app.router.add_get("/miniapp", serve_miniapp_index)
         app.router.add_get("/miniapp/", serve_miniapp_index)
+        app.router.add_static("/miniapp", miniapp_dir, name="miniapp")
         logger.info("Mini App served from %s", miniapp_dir)
     else:
         logger.warning("Mini App dir not found: %s", miniapp_dir)
