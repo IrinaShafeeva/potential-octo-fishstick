@@ -14,3 +14,4 @@ aiosqlite==0.20.0
 PyJWT>=2.8.0
 passlib[bcrypt]>=1.7.4
 google-auth>=2.25.0
+requests>=2.28.0
