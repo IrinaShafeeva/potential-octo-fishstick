@@ -101,6 +101,33 @@ async def run_pipeline_from_transcript(
     return await _run_editor(memory_id, cleaned, [], ctx, chapter_suggestion, thread_summary)
 
 
+async def run_pipeline_skip_all_clarification(user_id: int, memory_id: int) -> dict:
+    """Skip all clarification questions, run editor directly with empty thread."""
+    async with async_session() as session:
+        repo = Repository(session)
+        memory = await repo.get_memory(memory_id)
+    if not memory or memory.user_id != user_id:
+        return {"status": "error", "error": "not_found"}
+    cleaned = memory.cleaned_transcript or memory.raw_transcript or ""
+    if not cleaned.strip():
+        return {"status": "error", "error": "empty_transcript"}
+
+    ctx = await _fetch_user_context(user_id)
+    chapter_suggestion = memory.chapter_suggestion
+    thread_summary = None
+    if chapter_suggestion:
+        for ch in ctx.get("chapters", []):
+            if ch.title == chapter_suggestion:
+                thread_summary = ch.thread_summary
+                break
+
+    async with async_session() as session:
+        repo = Repository(session)
+        await repo.clear_clarification_state(memory_id)
+
+    return await _run_editor(memory_id, cleaned, [], ctx, chapter_suggestion, thread_summary)
+
+
 async def run_clarification_answer(
     user_id: int,
     memory_id: int,

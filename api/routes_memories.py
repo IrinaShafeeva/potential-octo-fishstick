@@ -6,7 +6,7 @@ from aiohttp import web
 from sqlalchemy import update
 
 from api.auth import require_auth
-from api.pipeline import run_pipeline_from_transcript, run_clarification_answer
+from api.pipeline import run_pipeline_from_transcript, run_clarification_answer, run_pipeline_skip_all_clarification
 from bot.db.engine import async_session
 from bot.db.models import Memory
 from bot.db.repository import Repository
@@ -233,6 +233,20 @@ async def post_skip_clarification(request: web.Request) -> web.Response:
     result = await run_pipeline_from_transcript(user.id, raw, memory_id)
     if result.get("status") == "clarification":
         return web.json_response({"error": "still_has_question"}, status=400)
+    if result.get("status") == "preview":
+        return web.json_response(result)
+    return web.json_response({"error": "pipeline_failed"}, status=500)
+
+
+@require_auth
+async def post_skip_all_clarification(request: web.Request) -> web.Response:
+    """POST /api/v1/memories/:id/skip-all-clarification - skip all questions, go to preview."""
+    user = request["user"]
+    memory_id = int(request.match_info["id"])
+
+    result = await run_pipeline_skip_all_clarification(user.id, memory_id)
+    if result.get("status") == "error":
+        return web.json_response({"error": result.get("error", "unknown")}, status=400)
     if result.get("status") == "preview":
         return web.json_response(result)
     return web.json_response({"error": "pipeline_failed"}, status=500)

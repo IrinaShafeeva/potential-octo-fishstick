@@ -6,7 +6,7 @@
   <title>Мои воспоминания</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-  <link rel="stylesheet" href="/miniapp/styles.css?v=5">
+  <link rel="stylesheet" href="/miniapp/styles.css?v=8">
 </head>
 <body>
   <div id="app">
@@ -16,6 +16,7 @@
       <div id="screen-home" class="screen home-screen">
         <div class="home-bg"></div>
         <header class="home-header">
+          <p class="home-welcome" id="home-welcome">Добро пожаловать!</p>
           <h1 class="home-title">Расскажите свою историю</h1>
           <div class="home-burger-wrap">
             <button id="btn-burger" class="home-burger" aria-label="Меню">≡</button>
@@ -38,8 +39,8 @@
       </div>
 
       <!-- Record -->
-      <div id="screen-record" class="screen hidden">
-        <header class="header">
+      <div id="screen-record" class="screen hidden screen-padded">
+        <header class="header header-compact">
           <button class="back" data-back>← Назад</button>
           <h2>Записать воспоминание</h2>
         </header>
@@ -50,22 +51,22 @@
           </button>
           <p class="hint">Зажмите кнопку — идёт запись, отпустите — сохраняется</p>
           <hr class="record-divider">
-          <textarea id="memory-text" placeholder="Или введите текст…" rows="4"></textarea>
+          <textarea id="memory-text" placeholder="Или введите текст…" rows="3"></textarea>
           <button id="btn-save-memory" class="btn-primary">Сохранить текст</button>
         </div>
       </div>
 
       <!-- Book = Chapters + Memories (merged) -->
-      <div id="screen-book" class="screen hidden">
-        <header class="header">
+      <div id="screen-book" class="screen hidden screen-book">
+        <header class="header header-compact">
           <button class="back" data-back>← Назад</button>
           <h2>Моя книга</h2>
-          <p class="hint">Перетащите главу для смены порядка. Нажмите — откроются воспоминания.</p>
+          <p class="hint">Перетащите за ⋮⋮ для смены порядка. Нажмите — откроются воспоминания.</p>
         </header>
         <div id="book-chapters" class="book-chapters"></div>
         <div class="book-add-chapter">
           <input type="text" id="new-chapter-title" placeholder="Название новой главы">
-          <button id="btn-add-chapter" class="btn-primary">Добавить главу</button>
+          <button id="btn-add-chapter" class="btn-primary btn-compact">Добавить</button>
         </div>
         <div class="book-actions">
           <button id="btn-download-pdf" class="btn-primary">Скачать PDF</button>
@@ -73,13 +74,13 @@
       </div>
 
       <!-- Memory Preview (after save text/voice) -->
-      <div id="screen-preview" class="screen hidden">
-        <header class="header">
+      <div id="screen-preview" class="screen hidden screen-padded">
+        <header class="header header-compact">
           <button class="back" id="btn-preview-back">← Назад</button>
           <h2 id="preview-title">Воспоминание</h2>
         </header>
         <div class="preview-content">
-          <textarea id="preview-text" placeholder="Текст воспоминания…" rows="6"></textarea>
+          <textarea id="preview-text" placeholder="Текст воспоминания…" rows="4"></textarea>
           <p id="preview-chapter-hint" class="hint"></p>
           <div class="preview-actions">
             <button id="btn-save-preview" class="btn-primary">Сохранить в главу</button>
@@ -89,24 +90,25 @@
       </div>
 
       <!-- Clarification (AI question) -->
-      <div id="screen-clarification" class="screen hidden">
-        <header class="header">
+      <div id="screen-clarification" class="screen hidden screen-padded">
+        <header class="header header-compact">
           <button class="back" id="btn-clarification-back">← Назад</button>
           <h2>Уточнение</h2>
         </header>
         <div class="clarification-content">
           <p id="clarification-question" class="clarification-question"></p>
           <div class="form">
-            <textarea id="clarification-answer" placeholder="Ваш ответ…" rows="3"></textarea>
+            <textarea id="clarification-answer" placeholder="Ваш ответ…" rows="2"></textarea>
             <button id="btn-send-clarification" class="btn-primary">Отправить</button>
             <button id="btn-skip-clarification" class="btn-secondary">Пропустить</button>
+            <button id="btn-skip-all-clarification" class="btn-link">Без подробностей</button>
           </div>
         </div>
       </div>
 
       <!-- Subscription -->
-      <div id="screen-subscription" class="screen hidden">
-        <header class="header">
+      <div id="screen-subscription" class="screen hidden screen-padded">
+        <header class="header header-compact">
           <button class="back" data-back>← Назад</button>
           <h2>Подписка</h2>
         </header>
@@ -118,6 +120,6 @@
       </div>
     </div>
   </div>
-  <script src="/miniapp/app.js?v=5"></script>
+  <script src="/miniapp/app.js?v=8"></script>
 </body>
 </html>

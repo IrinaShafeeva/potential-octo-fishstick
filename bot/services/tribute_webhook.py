@@ -36,6 +36,7 @@ from api.routes_memories import (
     get_clarification,
     post_clarification,
     post_skip_clarification,
+    post_skip_all_clarification,
     get_memory,
     post_edit,
     post_save,
@@ -150,6 +151,7 @@ def create_webhook_app() -> web.Application:
     app.router.add_get("/api/v1/memories/{id}/clarification", get_clarification)
     app.router.add_post("/api/v1/memories/{id}/clarification", post_clarification)
     app.router.add_post("/api/v1/memories/{id}/skip-clarification", post_skip_clarification)
+    app.router.add_post("/api/v1/memories/{id}/skip-all-clarification", post_skip_all_clarification)
     app.router.add_get("/api/v1/memories/{id}", get_memory)
     app.router.add_post("/api/v1/memories/{id}/edit", post_edit)
     app.router.add_post("/api/v1/memories/{id}/save", post_save)

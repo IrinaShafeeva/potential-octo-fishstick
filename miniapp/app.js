@@ -29,12 +29,24 @@
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(url, { ...options, headers });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `HTTP ${res.status}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000);
+    try {
+      const res = await fetch(url, { ...options, headers, signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') throw new Error('Превышено время ожидания. Проверьте интернет.');
+      if (e.message === 'Failed to fetch' || e.message === 'Load failed') {
+        throw new Error('Ошибка сети. Проверьте интернет и попробуйте снова.');
+      }
+      throw e;
     }
-    return res.json();
   }
 
   async function apiBlob(path) {
@@ -63,6 +75,10 @@
     document.querySelectorAll('.screen').forEach((s) => s.classList.add('hidden'));
     const el = document.getElementById('screen-' + id);
     if (el) el.classList.remove('hidden');
+    if (id === 'home' && me) {
+      const w = document.getElementById('home-welcome');
+      if (w) w.textContent = me.first_name ? `Добро пожаловать, ${me.first_name}` : 'Добро пожаловать';
+    }
   }
 
   function showHome() {
@@ -71,13 +87,14 @@
 
   async function loadMe() {
     me = await api('/me');
+    const welcomeEl = document.getElementById('home-welcome');
+    if (welcomeEl) welcomeEl.textContent = me.first_name ? `Добро пожаловать, ${me.first_name}` : 'Добро пожаловать';
+
     const nameEl = document.getElementById('user-name');
     if (nameEl) nameEl.textContent = me.first_name ? `, ${me.first_name}` : '';
 
     const statsEl = document.getElementById('stats');
-    if (statsEl) {
-      statsEl.textContent = `Воспоминаний: ${me.memories_count || 0}`;
-    }
+    if (statsEl) statsEl.textContent = `Воспоминаний: ${me.memories_count || 0}`;
 
     const subEl = document.getElementById('sub-status');
     if (subEl) subEl.textContent = me.is_premium ? 'Активна' : 'Оформить';
@@ -126,12 +143,24 @@
       formData.append('audio', blob, `voice.${ext}`);
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(url, { method: 'POST', headers, body: formData });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000);
+      try {
+        const res = await fetch(url, { method: 'POST', headers, body: formData, signal: controller.signal });
+        clearTimeout(timeout);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        return res.json();
+      } catch (e) {
+        clearTimeout(timeout);
+        if (e.name === 'AbortError') throw new Error('Загрузка заняла слишком много времени. Проверьте интернет.');
+        if (e.message === 'Failed to fetch' || e.message === 'Load failed') {
+          throw new Error('Ошибка сети. Проверьте интернет.');
+        }
+        throw e;
       }
-      return res.json();
     }
 
     function startRecord() {
@@ -144,7 +173,12 @@
           mediaRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
           mediaRecorder.onstop = async () => {
             stream.getTracks().forEach((t) => t.stop());
-            if (chunks.length === 0) return;
+            if (chunks.length === 0) {
+              btn.classList.remove('recording');
+              if (statusEl) statusEl.textContent = defaultLabel;
+              tg.showAlert('Запись слишком короткая. Удерживайте кнопку дольше.');
+              return;
+            }
             const blob = new Blob(chunks, { type: mime });
             try {
               const data = await uploadAudioBlob(blob);
@@ -153,7 +187,7 @@
               tg.showAlert(e.message || 'Ошибка');
             }
           };
-          mediaRecorder.start();
+          mediaRecorder.start(250);
           btn.classList.add('recording');
           statusEl.textContent = 'Идёт запись…';
         })
@@ -337,6 +371,20 @@
     }
   });
 
+  document.getElementById('btn-skip-all-clarification')?.addEventListener('click', async () => {
+    if (!currentMemoryId) return;
+    try {
+      const result = await api(`/memories/${currentMemoryId}/skip-all-clarification`, { method: 'POST' });
+      if (result.status === 'preview') {
+        await showPreview(result);
+      } else {
+        tg.showAlert(result.error || 'Ошибка');
+      }
+    } catch (e) {
+      tg.showAlert(e.message || 'Ошибка');
+    }
+  });
+
   document.getElementById('btn-add-chapter')?.addEventListener('click', async () => {
     const input = document.getElementById('new-chapter-title');
     const title = (input?.value || '').trim();
@@ -381,9 +429,9 @@
           return `
         <div class="book-chapter-block" data-id="${ch.id}">
           <div class="book-chapter-header">
-            <span class="chapter-drag-handle" aria-label="Перетащить">⋮⋮</span>
             <span class="chapter-item-title">${escapeHtml(ch.title)}</span>
             <span class="chapter-item-count">${memories.length} воспоминаний</span>
+            <span class="chapter-drag-handle" aria-label="Перетащить">⋮⋮</span>
           </div>
           <div class="book-chapter-memories">
             ${memories.length
@@ -422,7 +470,6 @@
               method: 'POST',
               body: JSON.stringify({ chapter_ids: newOrder }),
             });
-            tg.showAlert('Порядок сохранён');
             await loadBook();
           } catch (e) {
             tg.showAlert(e.message || 'Ошибка');
