@@ -555,9 +555,23 @@ body {
 .book-chapter-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   padding: 14px 16px;
   cursor: pointer;
+}
+
+.chapter-drag-handle {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  color: var(--color-text-soft);
+  font-size: 16px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.chapter-drag-handle:active {
+  cursor: grabbing;
   user-select: none;
   touch-action: none;
 }
@@ -567,8 +581,15 @@ body {
 }
 
 .book-chapter-header .chapter-item-title {
+  flex: 1;
   font-weight: 600;
   font-size: 17px;
+}
+
+.book-chapter-header .chapter-item-count {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--color-text-soft);
 }
 
 .book-chapter-memories {

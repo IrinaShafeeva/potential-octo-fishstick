@@ -381,6 +381,7 @@
           return `
         <div class="book-chapter-block" data-id="${ch.id}">
           <div class="book-chapter-header">
+            <span class="chapter-drag-handle" aria-label="Перетащить">⋮⋮</span>
             <span class="chapter-item-title">${escapeHtml(ch.title)}</span>
             <span class="chapter-item-count">${memories.length} воспоминаний</span>
           </div>
@@ -408,7 +409,7 @@
         animation: 150,
         ghostClass: 'sortable-ghost',
         draggable: '.book-chapter-block',
-        delay: 200,
+        handle: '.chapter-drag-handle',
         onEnd: async (evt) => {
           const items = container.querySelectorAll('.book-chapter-block');
           const newOrder = [...items].map((el) => parseInt(el.dataset.id, 10));
@@ -422,15 +423,17 @@
               body: JSON.stringify({ chapter_ids: newOrder }),
             });
             tg.showAlert('Порядок сохранён');
+            await loadBook();
           } catch (e) {
             tg.showAlert(e.message || 'Ошибка');
-            loadBook();
+            await loadBook();
           }
         },
       });
 
       container.querySelectorAll('.book-chapter-header').forEach((el) => {
-        el.addEventListener('click', () => {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('.chapter-drag-handle')) return;
           el.closest('.book-chapter-block').classList.toggle('expanded');
         });
       });
