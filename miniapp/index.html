@@ -14,32 +14,33 @@
     <div id="screens" class="hidden">
       <!-- Home -->
       <div id="screen-home" class="screen">
-        <header class="header">
-          <h1>Привет<span id="user-name"></span></h1>
-          <p class="subtitle">Моя книга воспоминаний</p>
-          <p id="stats" class="stats"></p>
+        <header class="home-header">
+          <h1 class="home-title">Расскажите свою историю</h1>
         </header>
-        <nav class="cards">
-          <button class="card" data-screen="record">
-            <span class="card-icon">🎙</span>
-            <span class="card-title">Записать воспоминание</span>
-            <span class="card-desc">Голосом или текстом</span>
+        <div class="home-illustration" id="home-illustration">
+          <svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="200" height="160" fill="#e8dcc8"/>
+            <circle cx="100" cy="70" r="25" fill="#c4b5a0"/>
+            <path d="M60 120 Q100 100 140 120" stroke="#2d6a4f" stroke-width="3" fill="none"/>
+            <rect x="70" y="95" width="60" height="45" rx="4" fill="#f5e6d3" stroke="#2d6a4f" stroke-width="1"/>
+            <rect x="78" y="103" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
+            <rect x="98" y="103" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
+            <rect x="78" y="118" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
+            <rect x="98" y="118" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
+          </svg>
+        </div>
+        <div class="home-record-area">
+          <p class="home-hint">Нажмите и удерживайте кнопку, пока говорите</p>
+          <button id="btn-record-home" class="btn-record-main">
+            <span class="btn-mic-icon"></span>
+            <span id="home-record-status" class="btn-record-label">Записать</span>
           </button>
-          <button class="card" data-screen="book">
-            <span class="card-icon">📖</span>
-            <span class="card-title">Моя книга</span>
-            <span class="card-desc">Читать и скачать PDF</span>
-          </button>
-          <button class="card" data-screen="chapters">
-            <span class="card-icon">🧩</span>
-            <span class="card-title">Главы</span>
-            <span class="card-desc">Управление главами</span>
-          </button>
-          <button class="card" data-screen="subscription">
-            <span class="card-icon">⭐</span>
-            <span class="card-title">Подписка</span>
-            <span id="sub-status" class="card-desc">Оформить</span>
-          </button>
+        </div>
+        <nav class="home-menu">
+          <button class="home-menu-btn" data-screen="record">Ввести текст</button>
+          <button class="home-menu-btn" data-screen="book">Моя книга</button>
+          <button class="home-menu-btn" data-screen="chapters">Главы</button>
+          <button class="home-menu-btn" data-screen="subscription">Подписка</button>
         </nav>
       </div>
 
@@ -50,9 +51,14 @@
           <h2>Записать воспоминание</h2>
         </header>
         <div class="form">
-          <textarea id="memory-text" placeholder="Расскажите что-нибудь из жизни…" rows="5"></textarea>
-          <button id="btn-save-memory" class="btn-primary">Сохранить</button>
-          <p id="record-hint" class="hint">Или отправьте голосовое в боте — там доступна запись голосом</p>
+          <button id="btn-record-voice" class="btn-record">
+            <span class="btn-mic-icon"></span>
+            <span id="record-status">Зажмите и говорите</span>
+          </button>
+          <p class="hint">Зажмите кнопку — идёт запись, отпустите — сохраняется</p>
+          <hr class="record-divider">
+          <textarea id="memory-text" placeholder="Или введите текст…" rows="4"></textarea>
+          <button id="btn-save-memory" class="btn-primary">Сохранить текст</button>
         </div>
       </div>
 

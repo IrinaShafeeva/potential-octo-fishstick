@@ -1,0 +1,16 @@
+# Exclude from Docker build
+.git
+.gitignore
+.env
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.idea
+.vscode
+*.md
+memoir_bot/
+mobile/
+tests/

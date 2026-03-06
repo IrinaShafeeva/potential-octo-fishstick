@@ -1,5 +1,5 @@
 """Pydantic request/response schemas for REST API."""
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 # Auth

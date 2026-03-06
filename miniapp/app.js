@@ -91,6 +91,80 @@
     btn.addEventListener('click', showHome);
   });
 
+  // Hold-to-record voice (home + record screen)
+  function setupRecordButton(btn, statusEl) {
+    if (!btn) return;
+    if (!window.MediaRecorder) {
+      if (statusEl) statusEl.textContent = 'Запись недоступна';
+      btn.disabled = true;
+      return;
+    }
+
+    const defaultLabel = statusEl ? statusEl.textContent : 'Записать';
+    let mediaRecorder = null;
+    let chunks = [];
+
+    async function uploadAudioBlob(blob) {
+      const url = `${API_BASE}/memories/audio`;
+      const formData = new FormData();
+      const ext = blob.type.includes('webm') ? 'webm' : 'ogg';
+      formData.append('audio', blob, `voice.${ext}`);
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(url, { method: 'POST', headers, body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    function startRecord() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') return;
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => {
+          const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+          mediaRecorder = new MediaRecorder(stream);
+          chunks = [];
+          mediaRecorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+          mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach((t) => t.stop());
+            if (chunks.length === 0) return;
+            const blob = new Blob(chunks, { type: mime });
+            try {
+              await uploadAudioBlob(blob);
+              tg.showAlert('Воспоминание сохранено');
+              loadMe();
+            } catch (e) {
+              tg.showAlert(e.message || 'Ошибка');
+            }
+          };
+          mediaRecorder.start();
+          btn.classList.add('recording');
+          statusEl.textContent = 'Идёт запись…';
+        })
+        .catch(() => tg.showAlert('Нет доступа к микрофону'));
+    }
+
+    function stopRecord() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        btn.classList.remove('recording');
+        if (statusEl) statusEl.textContent = defaultLabel;
+      }
+    }
+
+    btn.addEventListener('mousedown', (e) => { e.preventDefault(); startRecord(); });
+    btn.addEventListener('mouseup', stopRecord);
+    btn.addEventListener('mouseleave', stopRecord);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecord(); }, { passive: false });
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecord(); }, { passive: false });
+    btn.addEventListener('touchcancel', stopRecord);
+  }
+
+  setupRecordButton(document.getElementById('btn-record-home'), document.getElementById('home-record-status'));
+  setupRecordButton(document.getElementById('btn-record-voice'), document.getElementById('record-status'));
+
   document.getElementById('btn-save-memory')?.addEventListener('click', async () => {
     const textarea = document.getElementById('memory-text');
     const text = (textarea?.value || '').trim();

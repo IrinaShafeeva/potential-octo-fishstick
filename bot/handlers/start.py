@@ -85,6 +85,6 @@ async def cmd_app(message: Message) -> None:
     await message.answer(
         "📱 Откройте приложение:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть приложение", web_app=WebAppInfo(url=miniapp_url))],
+            [InlineKeyboardButton(text="Open", web_app=WebAppInfo(url=miniapp_url))],
         ]),
     )

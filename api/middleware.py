@@ -20,4 +20,7 @@ async def cors_middleware(request: web.Request, handler):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+    # Allow embedding in Telegram WebView (fixes 403 Forbidden)
+    if request.path.startswith("/miniapp"):
+        response.headers["Content-Security-Policy"] = "frame-ancestors *"
     return response

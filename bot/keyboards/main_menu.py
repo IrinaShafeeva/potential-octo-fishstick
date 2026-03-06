@@ -19,7 +19,7 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
     ]
     if settings.mini_app_url:
         miniapp_url = settings.mini_app_url.rstrip("/") + "/miniapp"
-        rows.append([KeyboardButton(text="📱 Открыть приложение", web_app=WebAppInfo(url=miniapp_url))])
+        rows.append([KeyboardButton(text="📱 Open", web_app=WebAppInfo(url=miniapp_url))])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
@@ -31,7 +31,7 @@ def onboarding_kb() -> ReplyKeyboardMarkup:
     ]
     if settings.mini_app_url:
         miniapp_url = settings.mini_app_url.rstrip("/") + "/miniapp"
-        rows.append([KeyboardButton(text="📱 Открыть приложение", web_app=WebAppInfo(url=miniapp_url))])
+        rows.append([KeyboardButton(text="📱 Open", web_app=WebAppInfo(url=miniapp_url))])
     return ReplyKeyboardMarkup(
         keyboard=rows,
         resize_keyboard=True,
