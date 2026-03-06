@@ -615,6 +615,9 @@ body {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--color-white);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .book-chapter-header {
@@ -623,6 +626,8 @@ body {
   gap: 10px;
   padding: 14px 16px;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .chapter-drag-handle {
@@ -632,13 +637,19 @@ body {
   font-size: 16px;
   cursor: grab;
   user-select: none;
+  -webkit-user-select: none;
   touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .chapter-drag-handle:active {
   cursor: grabbing;
-  user-select: none;
-  touch-action: none;
+}
+
+.sortable-ghost,
+.book-chapter-block.sortable-ghost {
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .book-chapter-header:active {
@@ -665,6 +676,11 @@ body {
 
 .book-chapter-block.expanded .book-chapter-memories {
   display: block;
+}
+
+.book-chapter-memories .memory-text {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .book-add-chapter {
