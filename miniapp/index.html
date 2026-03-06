@@ -6,42 +6,35 @@
   <title>Мои воспоминания</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-  <link rel="stylesheet" href="/miniapp/styles.css?v=2">
+  <link rel="stylesheet" href="/miniapp/styles.css?v=5">
 </head>
 <body>
   <div id="app">
     <div id="loading">Загрузка…</div>
     <div id="screens" class="hidden">
       <!-- Home -->
-      <div id="screen-home" class="screen">
+      <div id="screen-home" class="screen home-screen">
+        <div class="home-bg"></div>
         <header class="home-header">
           <h1 class="home-title">Расскажите свою историю</h1>
+          <div class="home-burger-wrap">
+            <button id="btn-burger" class="home-burger" aria-label="Меню">≡</button>
+            <div id="home-dropdown" class="home-dropdown hidden">
+              <button class="home-dropdown-btn" data-screen="book">Моя книга</button>
+              <button class="home-dropdown-btn" data-screen="subscription">Подписка</button>
+            </div>
+          </div>
         </header>
-        <div class="home-illustration" id="home-illustration">
-          <svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect width="200" height="160" fill="#e8dcc8"/>
-            <circle cx="100" cy="70" r="25" fill="#c4b5a0"/>
-            <path d="M60 120 Q100 100 140 120" stroke="#2d6a4f" stroke-width="3" fill="none"/>
-            <rect x="70" y="95" width="60" height="45" rx="4" fill="#f5e6d3" stroke="#2d6a4f" stroke-width="1"/>
-            <rect x="78" y="103" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
-            <rect x="98" y="103" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
-            <rect x="78" y="118" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
-            <rect x="98" y="118" width="15" height="12" fill="#2d6a4f" opacity="0.3"/>
-          </svg>
+        <div class="home-content">
+          <div class="home-record-row">
+            <button type="button" class="home-text-link" data-screen="record">Ввести текст</button>
+            <button id="btn-record-home" class="btn-record-main">
+              <span class="btn-mic-icon"></span>
+              <span id="home-record-status" class="btn-record-label">Записать</span>
+            </button>
+          </div>
+          <p class="home-hint">Удерживайте кнопку для записи голоса</p>
         </div>
-        <div class="home-record-area">
-          <p class="home-hint">Нажмите и удерживайте кнопку, пока говорите</p>
-          <button id="btn-record-home" class="btn-record-main">
-            <span class="btn-mic-icon"></span>
-            <span id="home-record-status" class="btn-record-label">Записать</span>
-          </button>
-        </div>
-        <nav class="home-menu">
-          <button class="home-menu-btn" data-screen="record">Ввести текст</button>
-          <button class="home-menu-btn" data-screen="book">Моя книга</button>
-          <button class="home-menu-btn" data-screen="chapters">Главы</button>
-          <button class="home-menu-btn" data-screen="subscription">Подписка</button>
-        </nav>
       </div>
 
       <!-- Record -->
@@ -62,29 +55,52 @@
         </div>
       </div>
 
-      <!-- Book -->
+      <!-- Book = Chapters + Memories (merged) -->
       <div id="screen-book" class="screen hidden">
         <header class="header">
           <button class="back" data-back>← Назад</button>
           <h2>Моя книга</h2>
+          <p class="hint">Перетащите главу для смены порядка. Нажмите — откроются воспоминания.</p>
         </header>
-        <div id="book-content" class="book-content"></div>
+        <div id="book-chapters" class="book-chapters"></div>
+        <div class="book-add-chapter">
+          <input type="text" id="new-chapter-title" placeholder="Название новой главы">
+          <button id="btn-add-chapter" class="btn-primary">Добавить главу</button>
+        </div>
         <div class="book-actions">
           <button id="btn-download-pdf" class="btn-primary">Скачать PDF</button>
         </div>
       </div>
 
-      <!-- Chapters -->
-      <div id="screen-chapters" class="screen hidden">
+      <!-- Memory Preview (after save text/voice) -->
+      <div id="screen-preview" class="screen hidden">
         <header class="header">
-          <button class="back" data-back>← Назад</button>
-          <h2>Главы</h2>
-          <p class="hint">Зажмите и перетащите главу, чтобы изменить порядок</p>
+          <button class="back" id="btn-preview-back">← Назад</button>
+          <h2 id="preview-title">Воспоминание</h2>
         </header>
-        <div id="chapters-list" class="chapters-list"></div>
-        <div class="form">
-          <input type="text" id="new-chapter-title" placeholder="Название новой главы">
-          <button id="btn-add-chapter" class="btn-primary">Добавить главу</button>
+        <div class="preview-content">
+          <textarea id="preview-text" placeholder="Текст воспоминания…" rows="6"></textarea>
+          <p id="preview-chapter-hint" class="hint"></p>
+          <div class="preview-actions">
+            <button id="btn-save-preview" class="btn-primary">Сохранить в главу</button>
+            <button id="btn-fantasy" class="btn-secondary">Творческая версия</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clarification (AI question) -->
+      <div id="screen-clarification" class="screen hidden">
+        <header class="header">
+          <button class="back" id="btn-clarification-back">← Назад</button>
+          <h2>Уточнение</h2>
+        </header>
+        <div class="clarification-content">
+          <p id="clarification-question" class="clarification-question"></p>
+          <div class="form">
+            <textarea id="clarification-answer" placeholder="Ваш ответ…" rows="3"></textarea>
+            <button id="btn-send-clarification" class="btn-primary">Отправить</button>
+            <button id="btn-skip-clarification" class="btn-secondary">Пропустить</button>
+          </div>
         </div>
       </div>
 
@@ -102,6 +118,6 @@
       </div>
     </div>
   </div>
-  <script src="/miniapp/app.js?v=2"></script>
+  <script src="/miniapp/app.js?v=5"></script>
 </body>
 </html>

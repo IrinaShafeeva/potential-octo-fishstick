@@ -84,12 +84,27 @@
   }
 
   document.querySelectorAll('[data-screen]').forEach((btn) => {
-    btn.addEventListener('click', () => showScreen(btn.dataset.screen));
+    btn.addEventListener('click', () => {
+      showScreen(btn.dataset.screen);
+      document.getElementById('home-dropdown')?.classList.add('hidden');
+    });
+  });
+
+  document.getElementById('btn-burger')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const dd = document.getElementById('home-dropdown');
+    dd?.classList.toggle('hidden');
+  });
+  document.addEventListener('click', () => {
+    document.getElementById('home-dropdown')?.classList.add('hidden');
   });
 
   document.querySelectorAll('[data-back]').forEach((btn) => {
     btn.addEventListener('click', showHome);
   });
+
+  let currentMemoryId = null;
+  let currentPreviewData = null;
 
   // Hold-to-record voice (home + record screen)
   function setupRecordButton(btn, statusEl) {
@@ -132,9 +147,8 @@
             if (chunks.length === 0) return;
             const blob = new Blob(chunks, { type: mime });
             try {
-              await uploadAudioBlob(blob);
-              tg.showAlert('Воспоминание сохранено');
-              loadMe();
+              const data = await uploadAudioBlob(blob);
+              await runMemoryPipeline(data.memory_id);
             } catch (e) {
               tg.showAlert(e.message || 'Ошибка');
             }
@@ -173,18 +187,153 @@
       return;
     }
     try {
-      tg.MainButton?.showProgress();
-      await api('/memories/text', {
+      tg.MainButton?.showProgress?.();
+      const data = await api('/memories/text', {
         method: 'POST',
         body: JSON.stringify({ text }),
       });
       textarea.value = '';
-      tg.showAlert('Воспоминание сохранено');
-      loadMe();
+      await runMemoryPipeline(data.memory_id);
     } catch (e) {
       tg.showAlert(e.message || 'Ошибка');
     } finally {
       tg.MainButton?.hideProgress?.();
+    }
+  });
+
+  async function runMemoryPipeline(memoryId) {
+    try {
+      const result = await api(`/memories/${memoryId}/confirm-transcript`, { method: 'POST' });
+      if (result.status === 'clarification') {
+        currentMemoryId = memoryId;
+        showClarification(result.question);
+        return;
+      }
+      if (result.status === 'preview') {
+        currentMemoryId = memoryId;
+        await showPreview(result);
+        return;
+      }
+      tg.showAlert('Воспоминание сохранено');
+      loadMe();
+    } catch (e) {
+      tg.showAlert(e.message || 'Ошибка');
+    }
+  }
+
+  async function showPreview(data) {
+    currentPreviewData = data;
+    document.getElementById('preview-title').textContent = data.title || 'Воспоминание';
+    let displayText = data.preview || '';
+    if (data.memory_id) {
+      try {
+        const mem = await api(`/memories/${data.memory_id}`);
+        displayText = mem.edited_memoir_text || mem.cleaned_transcript || mem.raw_transcript || displayText;
+      } catch (_) {}
+    }
+    document.getElementById('preview-text').value = displayText;
+    document.getElementById('preview-chapter-hint').textContent =
+      data.chapter_suggestion ? `Предлагаемая глава: ${data.chapter_suggestion}` : '';
+    showScreen('preview');
+  }
+
+  function showClarification(question) {
+    document.getElementById('clarification-question').textContent = question;
+    document.getElementById('clarification-answer').value = '';
+    showScreen('clarification');
+  }
+
+  document.getElementById('btn-preview-back')?.addEventListener('click', showHome);
+
+  document.getElementById('btn-save-preview')?.addEventListener('click', async () => {
+    const text = document.getElementById('preview-text').value.trim();
+    if (!text || !currentMemoryId) return;
+    try {
+      const chapters = await api('/chapters');
+      if (!chapters.chapters?.length) {
+        tg.showAlert('Сначала добавьте главу в «Моя книга»');
+        return;
+      }
+      const ch = chapters.chapters.find((c) => c.title === (currentPreviewData?.chapter_suggestion || ''))
+        || chapters.chapters[0];
+      const mem = await api(`/memories/${currentMemoryId}`);
+      const originalText = mem.edited_memoir_text || mem.cleaned_transcript || mem.raw_transcript || '';
+      if (text !== originalText) {
+        await api(`/memories/${currentMemoryId}/edit`, {
+          method: 'POST',
+          body: JSON.stringify({ instruction: `Замени весь текст на следующий:\n\n${text}` }),
+        });
+      }
+      await api(`/memories/${currentMemoryId}/save`, {
+        method: 'POST',
+        body: JSON.stringify({ chapter_id: ch.id }),
+      });
+      tg.showAlert('Воспоминание сохранено');
+      currentMemoryId = null;
+      currentPreviewData = null;
+      loadMe();
+      showHome();
+    } catch (e) {
+      tg.showAlert(e.message || 'Ошибка');
+    }
+  });
+
+  document.getElementById('btn-fantasy')?.addEventListener('click', async () => {
+    if (!currentMemoryId) return;
+    try {
+      const data = await api(`/memories/${currentMemoryId}/fantasy`, { method: 'POST' });
+      if (data.fantasy_memoir_text) {
+        document.getElementById('preview-text').value = data.fantasy_memoir_text;
+        tg.showAlert('Творческая версия загружена');
+      } else {
+        tg.showAlert('Не удалось создать творческую версию');
+      }
+    } catch (e) {
+      tg.showAlert(e.message || 'Ошибка');
+    }
+  });
+
+  document.getElementById('btn-clarification-back')?.addEventListener('click', () => {
+    currentMemoryId = null;
+    showHome();
+  });
+
+  document.getElementById('btn-send-clarification')?.addEventListener('click', async () => {
+    const answer = document.getElementById('clarification-answer').value.trim();
+    if (!answer || !currentMemoryId) {
+      tg.showAlert('Введите ответ');
+      return;
+    }
+    try {
+      const result = await api(`/memories/${currentMemoryId}/clarification`, {
+        method: 'POST',
+        body: JSON.stringify({ answer }),
+      });
+      if (result.status === 'clarification') {
+        document.getElementById('clarification-question').textContent = result.question;
+        document.getElementById('clarification-answer').value = '';
+        return;
+      }
+      if (result.status === 'preview') {
+        await showPreview(result);
+        return;
+      }
+    } catch (e) {
+      tg.showAlert(e.message || 'Ошибка');
+    }
+  });
+
+  document.getElementById('btn-skip-clarification')?.addEventListener('click', async () => {
+    if (!currentMemoryId) return;
+    try {
+      const result = await api(`/memories/${currentMemoryId}/skip-clarification`, { method: 'POST' });
+      if (result.status === 'preview') {
+        await showPreview(result);
+      } else {
+        tg.showAlert(result.error || 'Ошибка');
+      }
+    } catch (e) {
+      tg.showAlert(e.message || 'Ошибка');
     }
   });
 
@@ -202,88 +351,88 @@
       });
       input.value = '';
       tg.showAlert('Глава добавлена');
-      loadChapters();
+      loadBook();
       loadMe();
     } catch (e) {
       tg.showAlert(e.message || 'Ошибка');
     }
   });
 
-  async function loadBook() {
-    const container = document.getElementById('book-content');
-    try {
-      const data = await api('/book');
-      if (!data.chapters?.length) {
-        container.innerHTML = '<p class="empty-state">Пока нет глав. Добавьте воспоминания!</p>';
-        return;
-      }
-      container.innerHTML = data.chapters
-        .map(
-          (ch) => `
-        <div class="chapter-block">
-          <div class="chapter-title">${escapeHtml(ch.title)}</div>
-          ${(ch.memories || [])
-            .map(
-              (m) => `
-            <div class="memory-block">
-              <div class="memory-title">${escapeHtml(m.title || 'Без названия')}</div>
-              <div class="memory-text">${escapeHtml(m.text || '').replace(/\n/g, '<br>')}</div>
-            </div>
-          `
-            )
-            .join('')}
-        </div>
-      `
-        )
-        .join('');
-    } catch (e) {
-      container.innerHTML = '<p class="empty-state">Ошибка загрузки</p>';
-    }
-  }
-
   let sortableChapters = null;
+  let lastChapterOrder = [];
 
-  async function loadChapters() {
-    const container = document.getElementById('chapters-list');
+  async function loadBook() {
+    const container = document.getElementById('book-chapters');
     try {
-      const data = await api('/chapters');
-      if (!data.chapters?.length) {
-        container.innerHTML = '<p class="empty-state">Нет глав. Добавьте первую!</p>';
+      const bookData = await api('/book');
+      const chapters = bookData.chapters || [];
+      if (!chapters.length) {
+        container.innerHTML = '<p class="empty-state">Нет глав. Добавьте первую ниже!</p>';
         if (sortableChapters) {
           sortableChapters.destroy();
           sortableChapters = null;
         }
         return;
       }
-      container.innerHTML = data.chapters
-        .map(
-          (ch) => `
-        <div class="chapter-item" data-id="${ch.id}">
-          <span class="chapter-item-title">${escapeHtml(ch.title)}</span>
-          <span class="chapter-item-count">${ch.memories_count || 0} воспоминаний</span>
+      lastChapterOrder = chapters.map((c) => c.id);
+      container.innerHTML = chapters
+        .map((ch) => {
+          const memories = ch.memories || [];
+          return `
+        <div class="book-chapter-block" data-id="${ch.id}">
+          <div class="book-chapter-header">
+            <span class="chapter-item-title">${escapeHtml(ch.title)}</span>
+            <span class="chapter-item-count">${memories.length} воспоминаний</span>
+          </div>
+          <div class="book-chapter-memories">
+            ${memories.length
+              ? memories
+                  .map(
+                    (m) => `
+              <div class="memory-block">
+                <div class="memory-title">${escapeHtml(m.title || 'Без названия')}</div>
+                <div class="memory-text">${escapeHtml(m.text || '').replace(/\n/g, '<br>')}</div>
+              </div>
+            `
+                  )
+                  .join('')
+              : '<p class="empty-state">Пока пусто</p>'}
+          </div>
         </div>
-      `
-        )
+      `;
+        })
         .join('');
 
       if (sortableChapters) sortableChapters.destroy();
       sortableChapters = new Sortable(container, {
         animation: 150,
         ghostClass: 'sortable-ghost',
+        draggable: '.book-chapter-block',
+        delay: 200,
         onEnd: async (evt) => {
-          const items = container.querySelectorAll('.chapter-item');
-          const chapterIds = [...items].map((el) => parseInt(el.dataset.id, 10));
+          const items = container.querySelectorAll('.book-chapter-block');
+          const newOrder = [...items].map((el) => parseInt(el.dataset.id, 10));
+          const orderChanged = newOrder.length !== lastChapterOrder.length ||
+            newOrder.some((id, i) => id !== lastChapterOrder[i]);
+          if (!orderChanged) return;
+          lastChapterOrder = newOrder;
           try {
             await api('/chapters/reorder', {
               method: 'POST',
-              body: JSON.stringify({ chapter_ids: chapterIds }),
+              body: JSON.stringify({ chapter_ids: newOrder }),
             });
             tg.showAlert('Порядок сохранён');
           } catch (e) {
             tg.showAlert(e.message || 'Ошибка');
-            loadChapters();
+            loadBook();
           }
         },
+      });
+
+      container.querySelectorAll('.book-chapter-header').forEach((el) => {
+        el.addEventListener('click', () => {
+          el.closest('.book-chapter-block').classList.toggle('expanded');
+        });
       });
     } catch (e) {
       container.innerHTML = '<p class="empty-state">Ошибка загрузки</p>';
@@ -346,9 +495,7 @@
       loadBook();
     }
   });
-
   document.querySelector('[data-screen="book"]')?.addEventListener('click', loadBook);
-  document.querySelector('[data-screen="chapters"]')?.addEventListener('click', loadChapters);
   document.querySelector('[data-screen="subscription"]')?.addEventListener('click', loadSubscription);
 
   function escapeHtml(s) {
