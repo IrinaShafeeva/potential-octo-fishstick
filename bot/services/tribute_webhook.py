@@ -169,7 +169,9 @@ def create_webhook_app() -> web.Application:
 
         async def serve_miniapp_index(request):
             if index_path.exists():
-                return web.FileResponse(index_path)
+                resp = web.FileResponse(index_path)
+                resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                return resp
             raise web.HTTPNotFound()
 
         app.router.add_get("/miniapp", serve_miniapp_index)
