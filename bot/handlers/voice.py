@@ -503,7 +503,7 @@ async def handle_transcript_correction_voice(message: Message, state: FSMContext
 # Registered before state-filtered text handlers so menu buttons
 # are never swallowed by waiting_text_memory / waiting_edit_text / etc.
 
-@router.message(F.text == "🎙 Записать воспоминание")
+@router.message(F.text == "Записать воспоминание")
 async def prompt_record(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(MemoryStates.waiting_text_memory)
@@ -660,7 +660,7 @@ async def handle_voice(message: Message, state: FSMContext) -> None:
     if is_over_limit:
         await message.answer(
             f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
-            "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
+            "Оформите подписку «Моя книга», чтобы продолжить.",
             reply_markup=main_menu_kb(),
         )
         return
@@ -721,7 +721,7 @@ async def handle_text_memory(message: Message, state: FSMContext) -> None:
     if is_over_limit:
         await message.answer(
             f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
-            "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
+            "Оформите подписку «Моя книга», чтобы продолжить.",
             reply_markup=main_menu_kb(),
         )
         return
@@ -1157,7 +1157,7 @@ async def cb_show_fantasy_version(callback: CallbackQuery) -> None:
     chapter_line = f"\n📁 Предлагаю главу: <b>{memory.chapter_suggestion}</b>" if memory.chapter_suggestion else ""
     fantasy_text = memory.fantasy_memoir_text
     preview = fantasy_text[:1200] + ("…" if len(fantasy_text) > 1200 else "")
-    hint = "\n\n✨ <i>Это творческая версия — редактор добавил детали от себя.</i>\n<i>Если вдохновила — можете перезаписать воспоминание 🎙</i>"
+    hint = "\n\n<i>Это творческая версия — редактор добавил детали от себя.</i>\n<i>Если вдохновила — можете перезаписать воспоминание.</i>"
 
     await callback.message.edit_text(
         f"<b>{title}</b>{chapter_line}\n\n{preview}{hint}",
@@ -1283,14 +1283,14 @@ async def catch_all_text(message: Message, state: FSMContext) -> None:
     if len(text) < 20:
         await message.answer(
             "Расскажите чуть подробнее — хотя бы пару предложений. "
-            "Или нажмите «🎙 Записать воспоминание» в меню."
+            "Или нажмите «Записать воспоминание» в меню."
         )
         return
 
     if is_over_limit:
         await message.answer(
             f"В бесплатной версии доступно {settings.free_memories_limit} воспоминаний.\n"
-            "Оформите подписку «Моя книга», чтобы продолжить. ⭐",
+            "Оформите подписку «Моя книга», чтобы продолжить.",
             reply_markup=main_menu_kb(),
         )
         return

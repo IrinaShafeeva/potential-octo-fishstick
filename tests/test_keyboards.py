@@ -9,9 +9,9 @@ class TestMainMenu:
         texts = [btn.text for row in kb.keyboard for btn in row]
         assert BTN_RECORD in texts
         assert BTN_QUESTIONS in texts
-        assert "📖 Моя книга" in texts
-        assert "🧩 Структура глав" in texts
-        assert "⭐ Подписка" in texts
+        assert "Моя книга" in texts
+        assert "Структура глав" in texts
+        assert "Подписка" in texts
 
     def test_main_menu_is_resized(self):
         kb = main_menu_kb()
@@ -21,8 +21,8 @@ class TestMainMenu:
         kb = onboarding_kb()
         texts = [btn.text for row in kb.keyboard for btn in row]
         assert len(texts) == 3
-        assert "🎙 Начать говорить" in texts
-        assert "🧠 Помочь вопросами" in texts
+        assert "Начать говорить" in texts
+        assert "Помочь вопросами" in texts
 
     def test_onboarding_is_one_time(self):
         kb = onboarding_kb()

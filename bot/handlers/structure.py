@@ -39,7 +39,7 @@ class ChapterStates(StatesGroup):
     waiting_rename = State()
 
 
-@router.message(F.text == "🧩 Структура глав")
+@router.message(F.text == "Структура глав")
 async def show_structure(message: Message, state: FSMContext) -> None:
     await state.clear()
     async with async_session() as session:
@@ -89,7 +89,7 @@ async def cb_add_chapter(callback: CallbackQuery, state: FSMContext) -> None:
     if not (await _is_premium(callback.from_user.id)) and ch_count >= settings.free_chapters_limit:
         await callback.message.answer(
             f"В бесплатной версии доступна {settings.free_chapters_limit} глава.\n"
-            "Оформите подписку, чтобы добавить больше. ⭐"
+            "Оформите подписку, чтобы добавить больше."
         )
         await callback.answer()
         return

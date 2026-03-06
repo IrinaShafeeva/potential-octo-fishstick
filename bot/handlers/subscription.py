@@ -22,13 +22,13 @@ class PromoStates(StatesGroup):
 
 
 PRICING_TEXT = (
-    "⭐ <b>Подписка «Моя книга»</b>\n\n"
+    "<b>Подписка «Моя книга»</b>\n\n"
     "Бесплатно:\n"
     "• 5 воспоминаний\n"
     "• 1 глава\n"
     "• 3 вопроса из интервьюера\n\n"
     "━━━━━━━━━━━━━━━━━━\n\n"
-    "📖 <b>«Моя книга» — 3 990 ₽ / 3 месяца</b>\n"
+    "<b>«Моя книга» — 3 990 ₽ / 3 месяца</b>\n"
     "• Безлимит голосовых\n"
     "• Все главы\n"
     "• Полный режим интервьюера\n"
@@ -47,7 +47,7 @@ def subscription_kb() -> InlineKeyboardMarkup:
     buttons = []
     if settings.tribute_product_link:
         buttons.append([InlineKeyboardButton(
-            text="📖 Оплатить «Моя книга» — 3 990 ₽",
+            text="Оплатить «Моя книга» — 3 990 ₽",
             url=settings.tribute_product_link,
         )])
     if settings.tribute_family_product_link:
@@ -61,7 +61,7 @@ def subscription_kb() -> InlineKeyboardMarkup:
 
 # ── Show subscription ──
 
-@router.message(F.text == "⭐ Подписка")
+@router.message(F.text == "Подписка")
 async def show_subscription(message: Message, state: FSMContext) -> None:
     await state.clear()
     async with async_session() as session:

@@ -22,7 +22,7 @@ def _progress_bar(filled: int, total: int, length: int = 10) -> str:
     return "▓" * filled_blocks + "░" * (length - filled_blocks)
 
 
-@router.message(F.text == "📖 Моя книга")
+@router.message(F.text == "Моя книга")
 async def show_book(message: Message, state: FSMContext) -> None:
     await state.clear()
     async with async_session() as session:
@@ -44,7 +44,7 @@ async def show_book(message: Message, state: FSMContext) -> None:
     percent = min(100, int(mem_count / max(20, 1) * 100))
 
     text = (
-        f"📖 <b>Ваша книга</b>\n\n"
+        f"<b>Ваша книга</b>\n\n"
         f"📝 Воспоминаний: {mem_count}\n"
         f"📁 Глав: {ch_total} (заполнены: {ch_filled})\n"
         f"📄 Примерно страниц: {pages}\n\n"
@@ -61,7 +61,7 @@ async def show_book(message: Message, state: FSMContext) -> None:
         text += "\nНажмите на номер главы, чтобы посмотреть содержимое."
 
     if not chapters:
-        text += "\nУ вас пока нет глав. Нажмите «🧩 Структура глав», чтобы создать."
+        text += "\nУ вас пока нет глав. Нажмите «Структура глав», чтобы создать."
 
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     buttons = []
@@ -119,7 +119,7 @@ async def cb_export_pdf(callback: CallbackQuery) -> None:
 
         if not user.is_premium:
             await callback.message.answer(
-                "Экспорт в PDF доступен только в подписке «Моя книга». ⭐"
+                "Экспорт в PDF доступен только в подписке «Моя книга»."
             )
             return
 
@@ -160,6 +160,6 @@ async def cb_export_pdf(callback: CallbackQuery) -> None:
         except Exception:
             pass
         doc = BufferedInputFile(pdf_bytes, filename="Моя_книга_воспоминаний.pdf")
-        await callback.message.answer_document(doc, caption="📖 Ваша книга воспоминаний")
+        await callback.message.answer_document(doc, caption="Ваша книга воспоминаний")
     else:
         await processing_msg.edit_text("Не удалось создать PDF. Попробуйте позже.")

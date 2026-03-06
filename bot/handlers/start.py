@@ -25,7 +25,7 @@ ONBOARDING_TEXT = (
 
 WELCOME_BACK_TEXT = (
     "С возвращением! Продолжайте рассказывать — "
-    "ваша книга ждёт новых историй. 📖"
+    "ваша книга ждёт новых историй."
 )
 
 
@@ -53,7 +53,7 @@ async def cmd_start(message: Message) -> None:
         await message.answer(ONBOARDING_TEXT, reply_markup=onboarding_kb())
 
 
-@router.message(F.text == "🎙 Начать говорить")
+@router.message(F.text == "Начать говорить")
 async def onboarding_speak(message: Message) -> None:
     await message.answer(
         "Отлично! Отправьте голосовое сообщение — расскажите что-нибудь из жизни. "
@@ -62,7 +62,7 @@ async def onboarding_speak(message: Message) -> None:
     )
 
 
-@router.message(F.text == "🧩 Сначала настрою главы")
+@router.message(F.text == "Сначала настрою главы")
 async def onboarding_chapters(message: Message) -> None:
     await message.answer(
         "Хорошо! Напишите название первой главы. Например:\n\n"
@@ -83,7 +83,7 @@ async def cmd_app(message: Message) -> None:
         return
     miniapp_url = settings.mini_app_url.rstrip("/") + "/miniapp"
     await message.answer(
-        "📱 Откройте приложение:",
+        "Откройте приложение:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Open", web_app=WebAppInfo(url=miniapp_url))],
         ]),

@@ -35,7 +35,7 @@ async def _send_question(
         if not user.is_premium and user.questions_asked_count >= settings.free_questions_limit:
             text = (
                 f"В бесплатной версии доступно {settings.free_questions_limit} вопроса.\n"
-                "Оформите подписку «Моя книга», чтобы открыть все вопросы. ⭐"
+                "Оформите подписку «Моя книга», чтобы открыть все вопросы."
             )
             if isinstance(message_or_callback, CallbackQuery):
                 await message_or_callback.message.answer(text, reply_markup=main_menu_kb())
@@ -141,7 +141,7 @@ async def cb_next_question(callback: CallbackQuery, state: FSMContext) -> None:
 async def cb_pause_questions(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.answer(
-        "Хорошо, отдохните. Когда захотите продолжить — нажмите «🧠 Вспомнить вместе».",
+        "Хорошо, отдохните. Когда захотите продолжить — нажмите «Вспомнить вместе».",
         reply_markup=main_menu_kb(),
     )
     await callback.answer()
@@ -152,7 +152,7 @@ async def cb_answer_voice(callback: CallbackQuery, state: FSMContext) -> None:
     log_id = int(callback.data.split(":")[1])
     await state.update_data(answering_question_log_id=log_id)
     await callback.message.answer(
-        "Отправьте голосовое сообщение — расскажите свою историю. 🎙"
+        "Отправьте голосовое сообщение — расскажите свою историю."
     )
     await callback.answer()
 
